@@ -81,6 +81,7 @@ function formatDate(dateStr) {
 
 export default function EventCard({ event, compact = false }) {
   const [showRegistration, setShowRegistration] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const [, forceUpdate] = useState(0)
   const colors = EVENT_COLORS[event['Event Type']] || EVENT_COLORS['Open Play']
   const hasImage = event['Image URL'] && event['Image URL'].trim()
@@ -152,7 +153,15 @@ export default function EventCard({ event, compact = false }) {
           </div>
 
           {event['Description'] && (
-            <p className="text-sm text-charcoal-light mb-4 line-clamp-2">{event['Description']}</p>
+            <div className="mb-4">
+              <p className={`text-sm text-charcoal-light ${expanded ? '' : 'line-clamp-2'}`}>{event['Description']}</p>
+              {event['Description'].length > 100 && (
+                <button onClick={() => setExpanded(!expanded)}
+                  className="text-xs text-teal font-semibold mt-1 bg-transparent border-none cursor-pointer p-0 hover:text-teal-dark">
+                  {expanded ? 'Show less' : 'Read more'}
+                </button>
+              )}
+            </div>
           )}
 
           {maxSpots > 0 && (
