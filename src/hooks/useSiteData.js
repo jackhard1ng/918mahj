@@ -3,16 +3,28 @@ import { useGoogleSheet } from './useGoogleSheet'
 import { SHEET_URLS } from '../config'
 import { demoEvents, demoShop, demoTestimonials } from '../utils/demoData'
 
+const ADMIN_STORAGE_KEY = 'mahj918_admin_events'
+
 function parseEventDate(dateStr) {
   if (!dateStr) return null
   const [month, day, year] = dateStr.split('/')
   return new Date(year, month - 1, day)
 }
 
+function getAdminEvents() {
+  try {
+    const stored = localStorage.getItem(ADMIN_STORAGE_KEY)
+    return stored ? JSON.parse(stored) : null
+  } catch {
+    return null
+  }
+}
+
 export function useEvents() {
   const { data, loading, error } = useGoogleSheet(SHEET_URLS.events)
   const useDemo = !SHEET_URLS.events || (error && !loading)
-  const raw = useDemo ? demoEvents : data
+  const adminEvents = getAdminEvents()
+  const raw = adminEvents || (useDemo ? demoEvents : data)
 
   const events = useMemo(() => {
     const today = new Date()
