@@ -636,6 +636,11 @@ export default function Admin() {
                 <textarea value={testimonialForm['Quote']} onChange={e => setTestimonialForm(p => ({ ...p, 'Quote': e.target.value }))}
                   rows={4} placeholder="What did they say?" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal resize-vertical" />
               </div>
+              <div>
+                <label className="block text-sm font-semibold text-charcoal mb-1">Date</label>
+                <input type="date" value={formatDateForInput(testimonialForm['Date'])} onChange={e => setTestimonialForm(p => ({ ...p, 'Date': formatDateFromInput(e.target.value) }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal" />
+              </div>
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-2">
               <button onClick={() => setTestimonialEditing(null)} className="px-5 py-2.5 rounded-lg border border-gray-200 text-charcoal-light font-semibold text-sm hover:bg-gray-50 transition-colors cursor-pointer bg-white">Cancel</button>
