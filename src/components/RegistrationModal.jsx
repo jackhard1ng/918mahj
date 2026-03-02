@@ -220,7 +220,7 @@ export default function RegistrationModal({ event, onClose }) {
                             <p className="text-sm text-league-gold font-semibold">{checkResult.name} is registered — payment pending</p>
                           </div>
                           {!isFree && (
-                            <p className="text-xs text-charcoal-light mt-1.5 ml-6.5">Your spot is reserved but not confirmed until payment is received. Please send {event['Price']} to complete your registration.</p>
+                            <p className="text-xs text-charcoal-light mt-1.5 ml-6.5">Your spot is reserved but not confirmed until payment is received. Please send {event['Price']} to complete your registration. Note: it may take a little time for us to verify your payment — if you just sent it, check back soon!</p>
                           )}
                         </div>
                       )
