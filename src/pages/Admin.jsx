@@ -4,6 +4,7 @@ import { demoEvents } from '../utils/demoData'
 import { useEvents } from '../hooks/useSiteData'
 
 const STORAGE_KEY = 'mahj918_admin_events'
+const ATTENDEE_STORAGE_KEY = 'mahj918_admin_attendees'
 const EVENT_TYPES = ['Open Play', 'Birdy Basics', 'League', 'Special Event', 'Private']
 
 const EMPTY_EVENT = {
@@ -18,6 +19,10 @@ const EMPTY_EVENT = {
   'Registration Link': '',
   'Max Spots': '',
   'Image URL': '',
+}
+
+function getEventId(event) {
+  return `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
 }
 
 function formatDateForInput(dateStr) {
@@ -58,6 +63,64 @@ export default function Admin() {
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState(null)
+  const [attendeePanel, setAttendeePanel] = useState(null) // event index in displayed[]
+  const [attendees, setAttendees] = useState({}) // { eventId: [{ name, paid, notes }] }
+  const [newAttendeeName, setNewAttendeeName] = useState('')
+
+  // Load attendees from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(ATTENDEE_STORAGE_KEY)
+      if (stored) setAttendees(JSON.parse(stored))
+    } catch { /* ignore */ }
+  }, [])
+
+  // Save attendees to localStorage
+  useEffect(() => {
+    if (Object.keys(attendees).length > 0) {
+      localStorage.setItem(ATTENDEE_STORAGE_KEY, JSON.stringify(attendees))
+    }
+  }, [attendees])
+
+  function getAttendeeList(event) {
+    return attendees[getEventId(event)] || []
+  }
+
+  function addAttendee(event) {
+    if (!newAttendeeName.trim()) return
+    const id = getEventId(event)
+    setAttendees(prev => ({
+      ...prev,
+      [id]: [...(prev[id] || []), { name: newAttendeeName.trim(), paid: false, notes: '' }],
+    }))
+    setNewAttendeeName('')
+    showToast('Attendee added')
+  }
+
+  function toggleAttendeePaid(event, idx) {
+    const id = getEventId(event)
+    setAttendees(prev => ({
+      ...prev,
+      [id]: (prev[id] || []).map((a, i) => i === idx ? { ...a, paid: !a.paid } : a),
+    }))
+  }
+
+  function removeAttendee(event, idx) {
+    const id = getEventId(event)
+    setAttendees(prev => ({
+      ...prev,
+      [id]: (prev[id] || []).filter((_, i) => i !== idx),
+    }))
+    showToast('Attendee removed')
+  }
+
+  function updateAttendeeNotes(event, idx, notes) {
+    const id = getEventId(event)
+    setAttendees(prev => ({
+      ...prev,
+      [id]: (prev[id] || []).map((a, i) => i === idx ? { ...a, notes } : a),
+    }))
+  }
 
   // Load events from localStorage or fall back to sheet/demo data
   useEffect(() => {
@@ -171,7 +234,7 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pt-20">
       {/* Header */}
       <div className="bg-charcoal text-white py-8">
         <div className="max-w-6xl mx-auto px-4">
@@ -215,8 +278,10 @@ export default function Admin() {
             <p className="text-xs text-charcoal-light font-semibold uppercase tracking-wide">Past</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
-            <p className="text-2xl font-heading text-coral">{stats.typeCounts['Special Event'] || 0}</p>
-            <p className="text-xs text-charcoal-light font-semibold uppercase tracking-wide">Special Events</p>
+            <p className="text-2xl font-heading text-special-purple">
+              {Object.values(attendees).reduce((sum, list) => sum + list.length, 0)}
+            </p>
+            <p className="text-xs text-charcoal-light font-semibold uppercase tracking-wide">Registered</p>
           </div>
         </div>
       </div>
@@ -319,7 +384,16 @@ export default function Admin() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex gap-1.5 shrink-0">
+                      <div className="flex gap-1.5 shrink-0 items-center">
+                        {/* Attendee count badge */}
+                        <button
+                          onClick={() => { setAttendeePanel(i); setNewAttendeeName('') }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-special-purple/10 text-special-purple hover:bg-special-purple/20 transition-colors cursor-pointer border-none text-xs font-semibold"
+                          title="Manage attendees"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" /></svg>
+                          {getAttendeeList(event).length}
+                        </button>
                         <button
                           onClick={() => openEdit(i)}
                           className="p-2 rounded-lg bg-teal/10 text-teal hover:bg-teal/20 transition-colors cursor-pointer border-none"
@@ -550,6 +624,131 @@ export default function Admin() {
           </div>
         </div>
       )}
+
+      {/* Attendee Panel */}
+      {attendeePanel !== null && displayed[attendeePanel] && (() => {
+        const event = displayed[attendeePanel]
+        const list = getAttendeeList(event)
+        const paidCount = list.filter(a => a.paid).length
+        const maxSpots = parseInt(event['Max Spots']) || 0
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 pt-16 overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg animate-fade-in-up">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="font-heading text-xl text-charcoal">Attendees</h2>
+                    <p className="text-sm text-charcoal-light mt-0.5">{event['Event Name']}</p>
+                  </div>
+                  <button
+                    onClick={() => setAttendeePanel(null)}
+                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer border-none bg-transparent"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                {/* Summary bar */}
+                <div className="flex gap-4 mt-3 text-sm">
+                  <span className="text-charcoal font-semibold">{list.length} registered</span>
+                  <span className="text-teal font-semibold">{paidCount} paid</span>
+                  <span className="text-coral font-semibold">{list.length - paidCount} unpaid</span>
+                  {maxSpots > 0 && (
+                    <span className="text-charcoal-light">{maxSpots - list.length} spots left</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Add attendee */}
+              <div className="p-4 border-b border-gray-100">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newAttendeeName}
+                    onChange={e => setNewAttendeeName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addAttendee(event)}
+                    placeholder="Add name..."
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal"
+                  />
+                  <button
+                    onClick={() => addAttendee(event)}
+                    className="px-4 py-2 bg-teal text-white font-semibold rounded-lg text-sm hover:bg-teal-dark transition-colors cursor-pointer border-none"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Attendee list */}
+              <div className="max-h-80 overflow-y-auto">
+                {list.length === 0 ? (
+                  <div className="p-8 text-center text-charcoal-light text-sm">
+                    No attendees yet. Add someone above.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-50">
+                    {list.map((attendee, idx) => (
+                      <div key={idx} className="px-4 py-3 flex items-center gap-3 hover:bg-gray-50">
+                        {/* Paid toggle */}
+                        <button
+                          onClick={() => toggleAttendeePaid(event, idx)}
+                          className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
+                            attendee.paid
+                              ? 'bg-teal border-teal text-white'
+                              : 'bg-white border-gray-300 text-transparent hover:border-teal'
+                          }`}
+                          title={attendee.paid ? 'Mark unpaid' : 'Mark paid'}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
+                        </button>
+
+                        {/* Name & notes */}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-semibold ${attendee.paid ? 'text-charcoal' : 'text-charcoal-light'}`}>
+                            {attendee.name}
+                          </p>
+                          <input
+                            type="text"
+                            value={attendee.notes}
+                            onChange={e => updateAttendeeNotes(event, idx, e.target.value)}
+                            placeholder="Notes (optional)"
+                            className="w-full text-xs text-charcoal-light/70 border-none bg-transparent focus:outline-none placeholder:text-charcoal-light/40 p-0 mt-0.5"
+                          />
+                        </div>
+
+                        {/* Status badge */}
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+                          attendee.paid ? 'bg-teal/10 text-teal' : 'bg-coral/10 text-coral'
+                        }`}>
+                          {attendee.paid ? 'Paid' : 'Unpaid'}
+                        </span>
+
+                        {/* Remove */}
+                        <button
+                          onClick={() => removeAttendee(event, idx)}
+                          className="p-1 rounded hover:bg-coral/10 text-charcoal-light hover:text-coral transition-colors cursor-pointer border-none bg-transparent shrink-0"
+                          title="Remove"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-gray-100 flex justify-end">
+                <button
+                  onClick={() => setAttendeePanel(null)}
+                  className="px-5 py-2.5 rounded-lg bg-charcoal text-white font-semibold text-sm hover:bg-charcoal/90 transition-colors cursor-pointer border-none"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Toast */}
       {toast && (
