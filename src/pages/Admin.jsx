@@ -509,8 +509,13 @@ export default function Admin() {
                             </div>
                             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-charcoal-light">
                               <span>{event['Time']}</span><span>{event['Venue']}</span>
-                              <span className="font-semibold text-coral">{event['Price']}</span>
-                              {event['Max Spots'] && <span>{event['Max Spots']} spots</span>}
+                              {/free/i.test(event['Price'] || '') ? (
+                                <span className="font-semibold text-teal">Free</span>
+                              ) : event['Price'] ? (
+                                <span className="font-semibold text-coral">{event['Price']}</span>
+                              ) : null}
+                              <span className="text-special-purple font-semibold">{getAttendeeList(event).length} registered</span>
+                              {event['Max Spots'] && <span>{Math.max(0, parseInt(event['Max Spots']) - getAttendeeList(event).length)}/{event['Max Spots']} spots left</span>}
                             </div>
                             {event['Description'] && <p className="text-xs text-charcoal-light/70 mt-1 line-clamp-1">{event['Description']}</p>}
                           </div>
