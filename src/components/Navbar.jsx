@@ -91,22 +91,24 @@ export default function Navbar() {
 
         {/* Mobile slide-in menu */}
         <div
-          className={`fixed top-0 right-0 h-full w-72 bg-white shadow-2xl z-50 md:hidden transform transition-transform duration-300 ${
+          className={`fixed top-0 right-0 h-full w-72 z-50 md:hidden transform transition-transform duration-300 ${
             menuOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
+          style={{ backgroundColor: '#ffffff', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)' }}
         >
-          <div className="flex justify-end p-4">
+          <div className="flex items-center justify-between p-5 border-b border-gray-100">
+            <span className="font-heading text-teal text-lg">MAHJ918</span>
             <button
-              className="p-2 bg-transparent border-none cursor-pointer text-charcoal"
+              className="p-2 bg-gray-100 rounded-full border-none cursor-pointer text-charcoal"
               onClick={() => setMenuOpen(false)}
               aria-label="Close menu"
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <ul className="flex flex-col gap-1 px-4 list-none m-0">
+          <ul className="flex flex-col gap-1 px-4 pt-4 list-none m-0">
             {NAV_LINKS.map(({ to, label }) => (
               <li key={to}>
                 <Link
