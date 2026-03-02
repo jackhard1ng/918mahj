@@ -96,13 +96,18 @@ export default function EventCard({ event, compact = false }) {
   }, [event['Event Name'], event['Date'], event['Time']])
 
   async function loadCount() {
+    const id = `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
+    // Try Firebase first, fall back to localStorage
     if (isFirebaseReady()) {
-      const all = await fetchAttendees()
-      const id = `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
-      setRegistered((all[id] || []).length)
-    } else {
-      setRegistered(getRegisteredCountLocal(event))
+      try {
+        const all = await fetchAttendees()
+        if (Object.keys(all).length > 0) {
+          setRegistered((all[id] || []).length)
+          return
+        }
+      } catch (e) { console.error('Firebase attendee read failed:', e) }
     }
+    setRegistered(getRegisteredCountLocal(event))
   }
 
   const handleRegister = () => {

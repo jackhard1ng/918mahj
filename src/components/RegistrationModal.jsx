@@ -8,18 +8,27 @@ function getEventId(event) {
   return `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
 }
 
-async function getAttendees(event) {
-  if (isFirebaseReady()) {
-    const all = await fetchAttendees()
-    return all[getEventId(event)] || []
-  }
+function getLocalAttendees() {
   try {
     const stored = localStorage.getItem(ATTENDEE_STORAGE_KEY)
-    const all = stored ? JSON.parse(stored) : {}
-    return all[getEventId(event)] || []
-  } catch {
-    return []
+    return stored ? JSON.parse(stored) : {}
+  } catch { return {} }
+}
+
+function saveLocalAttendees(all) {
+  try { localStorage.setItem(ATTENDEE_STORAGE_KEY, JSON.stringify(all)) } catch {}
+}
+
+async function getAttendees(event) {
+  const id = getEventId(event)
+  // Try Firebase first, fall back to localStorage
+  if (isFirebaseReady()) {
+    try {
+      const all = await fetchAttendees()
+      if (Object.keys(all).length > 0) return all[id] || []
+    } catch (e) { console.error('Firebase read failed:', e) }
   }
+  return getLocalAttendees()[id] || []
 }
 
 async function addAttendeeToStorage(event, name, contact) {
@@ -33,19 +42,21 @@ async function addAttendeeToStorage(event, name, contact) {
       notes: isFree ? 'Self-registered (free event)' : '',
     }
 
+    // Always save to localStorage first (guaranteed to work)
+    const localAll = getLocalAttendees()
+    const localList = localAll[id] || []
+    localAll[id] = [...localList, newAttendee]
+    saveLocalAttendees(localAll)
+
+    // Then try Firebase
     if (isFirebaseReady()) {
-      const all = await fetchAttendees()
-      const list = all[id] || []
-      await saveEventAttendees(id, [...list, newAttendee])
-      return true
+      try {
+        const fbAll = await fetchAttendees()
+        const fbList = fbAll[id] || []
+        await saveEventAttendees(id, [...fbList, newAttendee])
+      } catch (e) { console.error('Firebase attendee save failed:', e) }
     }
 
-    // Fallback: localStorage
-    const stored = localStorage.getItem(ATTENDEE_STORAGE_KEY)
-    const all = stored ? JSON.parse(stored) : {}
-    const list = all[id] || []
-    all[id] = [...list, newAttendee]
-    localStorage.setItem(ATTENDEE_STORAGE_KEY, JSON.stringify(all))
     return true
   } catch {
     return false

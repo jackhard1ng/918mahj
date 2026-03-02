@@ -17,6 +17,19 @@ const EMPTY_PRODUCT = {
 }
 const EMPTY_TESTIMONIAL = { 'Name': '', 'Quote': '', 'Date': '' }
 
+const ATTENDEE_STORAGE_KEY = 'mahj918_admin_attendees'
+
+function getLocalAttendees() {
+  try {
+    const stored = localStorage.getItem(ATTENDEE_STORAGE_KEY)
+    return stored ? JSON.parse(stored) : {}
+  } catch { return {} }
+}
+
+function saveLocalAttendees(all) {
+  try { localStorage.setItem(ATTENDEE_STORAGE_KEY, JSON.stringify(all)) } catch {}
+}
+
 function getEventId(event) {
   return `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
 }
@@ -184,11 +197,22 @@ export default function Admin() {
   useEffect(() => { setProducts([...sheetProducts]) }, [sheetProducts])
   useEffect(() => { setTestimonials([...sheetTestimonials]) }, [sheetTestimonials])
 
-  // Load attendees
+  // Load attendees (Firebase first, fall back to localStorage)
   useEffect(() => {
-    if (firebaseOn) {
-      fetchAttendees().then(setAttendees)
+    async function loadAttendees() {
+      if (firebaseOn) {
+        try {
+          const fbData = await fetchAttendees()
+          if (Object.keys(fbData).length > 0) {
+            setAttendees(fbData)
+            saveLocalAttendees(fbData) // sync to localStorage
+            return
+          }
+        } catch (e) { console.error('Firebase attendee load failed:', e) }
+      }
+      setAttendees(getLocalAttendees())
     }
+    loadAttendees()
   }, [firebaseOn])
 
   // ─── Persist helpers ───
@@ -218,8 +242,13 @@ export default function Admin() {
   }
   async function persistAttendees(next) {
     setAttendees(next)
+    // Always save to localStorage first (guaranteed to work)
+    saveLocalAttendees(next)
+    // Then try Firebase
     if (firebaseOn) {
-      await saveAttendees(next)
+      try {
+        await saveAttendees(next)
+      } catch (e) { console.error('Firebase attendee save failed:', e) }
     }
   }
 
