@@ -567,16 +567,53 @@ export default function Admin() {
                 </div>
               </div>
 
-              {/* Image URL */}
+              {/* Image */}
               <div>
-                <label className="block text-sm font-semibold text-charcoal mb-1">Image URL</label>
-                <input
-                  type="text"
-                  value={form['Image URL']}
-                  onChange={e => handleFormChange('Image URL', e.target.value)}
-                  placeholder="Optional image URL (leave blank for default)"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal"
-                />
+                <label className="block text-sm font-semibold text-charcoal mb-1">Event Image</label>
+                {form['Image URL'] && (
+                  <div className="mb-2 relative inline-block">
+                    <img src={form['Image URL']} alt="Preview" className="h-28 rounded-lg object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => handleFormChange('Image URL', '')}
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-coral text-white rounded-full flex items-center justify-center cursor-pointer border-none text-xs font-bold"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-gray-200 rounded-lg text-sm text-charcoal-light hover:border-teal hover:text-teal transition-colors cursor-pointer">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
+                    Upload Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        if (file.size > 2 * 1024 * 1024) {
+                          showToast('Image must be under 2MB')
+                          return
+                        }
+                        const reader = new FileReader()
+                        reader.onload = () => handleFormChange('Image URL', reader.result)
+                        reader.readAsDataURL(file)
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                  <span className="text-xs text-charcoal-light self-center">or</span>
+                  <input
+                    type="text"
+                    value={form['Image URL']?.startsWith('data:') ? '' : form['Image URL']}
+                    onChange={e => handleFormChange('Image URL', e.target.value)}
+                    placeholder="Paste image URL"
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal"
+                  />
+                </div>
+                <p className="text-xs text-charcoal-light/50 mt-1">Max 2MB. Leave blank for default image.</p>
               </div>
             </div>
 
