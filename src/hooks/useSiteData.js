@@ -4,6 +4,8 @@ import { SHEET_URLS } from '../config'
 import { demoEvents, demoShop, demoTestimonials } from '../utils/demoData'
 
 const ADMIN_STORAGE_KEY = 'mahj918_admin_events'
+const ADMIN_SHOP_KEY = 'mahj918_admin_shop'
+const ADMIN_TESTIMONIAL_KEY = 'mahj918_admin_testimonials'
 
 function parseEventDate(dateStr) {
   if (!dateStr) return null
@@ -11,9 +13,9 @@ function parseEventDate(dateStr) {
   return new Date(year, month - 1, day)
 }
 
-function getAdminEvents() {
+function getAdminData(key) {
   try {
-    const stored = localStorage.getItem(ADMIN_STORAGE_KEY)
+    const stored = localStorage.getItem(key)
     return stored ? JSON.parse(stored) : null
   } catch {
     return null
@@ -23,7 +25,7 @@ function getAdminEvents() {
 export function useEvents() {
   const { data, loading, error } = useGoogleSheet(SHEET_URLS.events)
   const useDemo = !SHEET_URLS.events || (error && !loading)
-  const adminEvents = getAdminEvents()
+  const adminEvents = getAdminData(ADMIN_STORAGE_KEY)
   const raw = adminEvents || (useDemo ? demoEvents : data)
 
   const events = useMemo(() => {
@@ -44,13 +46,15 @@ export function useEvents() {
 export function useShop() {
   const { data, loading, error } = useGoogleSheet(SHEET_URLS.shop)
   const useDemo = !SHEET_URLS.shop || (error && !loading)
-  const products = useDemo ? demoShop : data
+  const adminProducts = getAdminData(ADMIN_SHOP_KEY)
+  const products = adminProducts || (useDemo ? demoShop : data)
   return { products, loading: SHEET_URLS.shop ? loading : false, error: useDemo ? null : error }
 }
 
 export function useTestimonials() {
   const { data, loading, error } = useGoogleSheet(SHEET_URLS.testimonials)
   const useDemo = !SHEET_URLS.testimonials || (error && !loading)
-  const testimonials = useDemo ? demoTestimonials : data
+  const adminTestimonials = getAdminData(ADMIN_TESTIMONIAL_KEY)
+  const testimonials = adminTestimonials || (useDemo ? demoTestimonials : data)
   return { testimonials, loading: SHEET_URLS.testimonials ? loading : false, error: useDemo ? null : error }
 }
