@@ -37,18 +37,42 @@ function addAttendeeToStorage(event, name, contact) {
   }
 }
 
-function PaymentOption({ label, value, color, icon }) {
-  return (
-    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-      <span className={`w-10 h-10 ${color} text-white font-bold rounded-lg flex items-center justify-center text-lg`}>
+function getPaymentUrl(label, value) {
+  if (label === 'Venmo') return `https://venmo.com/${value.replace('@', '')}`
+  if (label === 'PayPal') return `https://paypal.me/${value}`
+  return null
+}
+
+function PaymentOption({ label, value, color, icon, hint }) {
+  const url = getPaymentUrl(label, value)
+
+  const content = (
+    <div className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${url ? 'bg-gray-50 hover:bg-gray-100 active:bg-gray-200 cursor-pointer' : 'bg-gray-50'}`}>
+      <span className={`w-10 h-10 ${color} text-white font-bold rounded-lg flex items-center justify-center text-lg shrink-0`}>
         {icon}
       </span>
-      <div>
-        <p className="font-semibold text-sm text-charcoal">{label}</p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="font-semibold text-sm text-charcoal">{label}</p>
+          {url && <span className="text-[10px] font-semibold text-teal bg-teal/10 px-1.5 py-0.5 rounded">Tap to pay</span>}
+        </div>
         <p className="text-charcoal-light text-sm">{value}</p>
+        {hint && <p className="text-charcoal-light/60 text-xs mt-0.5">{hint}</p>}
       </div>
+      {url && (
+        <svg className="w-5 h-5 text-teal ml-auto shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" /></svg>
+      )}
     </div>
   )
+
+  if (url) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block no-underline">
+        {content}
+      </a>
+    )
+  }
+  return content
 }
 
 export default function RegistrationModal({ event, onClose }) {
@@ -117,7 +141,7 @@ export default function RegistrationModal({ event, onClose }) {
                 <div className="space-y-2">
                   <PaymentOption label="Venmo" value={CONTACT.venmo} color="bg-[#3D95CE]" icon="V" />
                   <PaymentOption label="PayPal" value={CONTACT.paypal} color="bg-[#0070BA]" icon="P" />
-                  <PaymentOption label="Zelle" value={CONTACT.zelle} color="bg-[#6D1ED4]" icon="Z" />
+                  <PaymentOption label="Zelle" value={CONTACT.zelle} color="bg-[#6D1ED4]" icon="Z" hint="Open your bank app → Send with Zelle → enter email above" />
                 </div>
                 <div className="mt-3 p-3 bg-yellow/30 border-2 border-yellow rounded-lg">
                   <p className="text-xs font-bold text-charcoal uppercase tracking-wide mb-1">Include this in your memo</p>
