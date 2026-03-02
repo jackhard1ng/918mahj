@@ -4,7 +4,7 @@ import { useShop } from '../hooks/useSiteData'
 import ProductCard from '../components/ProductCard'
 import { CardSkeleton, ErrorFallback } from '../components/LoadingSkeleton'
 
-const CATEGORIES = ['All', 'Books & Guides', 'Sets & Tiles', 'Accessories', 'Entertaining']
+const CATEGORIES = ['All', 'Sets & Tiles', 'Accessories', 'Entertaining']
 
 export default function Shop() {
   const { products, loading, error } = useShop()
@@ -64,6 +64,52 @@ export default function Shop() {
         <p className="text-xs text-charcoal-light/60 text-center mt-8">
           Some links may be affiliate links. We only recommend products we love and use ourselves!
         </p>
+
+        {/* Affiliate Partners */}
+        <section className="mt-16">
+          <div className="text-center mb-8">
+            <h2 className="font-heading text-3xl text-charcoal mb-3">Our Favorite Partners</h2>
+            <p className="text-charcoal-light text-lg max-w-2xl mx-auto">
+              Shop from our favorite mahjong brands and use our code for a discount!
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              { name: 'Oh My Mahjong', url: 'https://www.ohmymahjong.com', code: '918MAHJ10' },
+              { name: 'The Mahjong House', url: 'https://www.themahjonghouse.com', code: 'FRIEND-F5BH7DL' },
+              { name: 'Yellow Mountain Imports', url: 'https://www.ymimports.com', code: 'MAHJ918-YMI-2025' },
+              { name: 'Miss Mahjong', url: 'https://missmahjong.com/?ref=MAHJ918', code: '918MAHJ10%OFF' },
+              { name: 'Peace Love Mahjong', url: 'https://www.peacelovemahjong.com', code: '918MAHJ10' },
+              { name: 'Bespoke Mahjong', url: 'https://www.bespokemahjong.com', code: 'MAHJ918' },
+              { name: 'Four Friends Mahjong', url: 'https://www.fourfriendsmahjong.com', code: 'MAHJ918' },
+              { name: 'Hip Hip Mahjong!', url: 'https://hiphipmahjong.com', code: 'MAHJ918' },
+              { name: 'My Fair Mahjong', url: 'https://www.myfairmahjong.com', code: 'MAHJ918' },
+              { name: 'Bam Bird Boutique', url: 'https://www.bambirdboutique.com', code: 'MAHJ918' },
+              { name: "Bam! Let's Mahjong", url: 'https://www.bamletsmahjong.com', code: 'MAHJ918' },
+              { name: 'Charleston Mahjong Club', url: 'https://www.charlestonmahjongclub.com', code: 'MAHJ918' },
+              { name: 'Amahj Line', url: 'https://amahjline.com', code: 'MAHJ918' },
+              { name: 'Thomas Blonde', url: 'https://www.thomasblonde.com', code: 'MAHJ918' },
+              { name: 'Tigre de Tartan', url: 'https://www.tigredetartan.com', code: 'MAHJ918' },
+            ].map((partner) => (
+              <a
+                key={partner.name}
+                href={partner.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-teal/30 transition-all no-underline"
+              >
+                <div className="w-10 h-10 bg-teal/10 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-teal/20 transition-colors">
+                  <span className="text-teal font-bold text-lg">{partner.name[0]}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm text-charcoal group-hover:text-teal transition-colors truncate">{partner.name}</p>
+                  <p className="text-xs text-coral font-semibold">Code: {partner.code}</p>
+                </div>
+                <svg className="w-4 h-4 text-charcoal-light/40 group-hover:text-teal shrink-0 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" /></svg>
+              </a>
+            ))}
+          </div>
+        </section>
 
         {/* Set Rentals */}
         <section className="mt-16 bg-gradient-to-r from-yellow/20 to-yellow/5 rounded-2xl p-8 md:p-12">

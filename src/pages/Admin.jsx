@@ -4,7 +4,7 @@ import { useEvents, useShop, useTestimonials, useGallery } from '../hooks/useSit
 import { isFirebaseReady, saveCollection, fetchAttendees, saveAttendees, saveEventAttendees, subscribeToAttendees, uploadImage, addGalleryPhoto, deleteGalleryPhoto, getEventId, COLLECTIONS } from '../services/db'
 
 const EVENT_TYPES = ['Open Play', 'Birdy Basics', 'League', 'Special Event', 'Private']
-const PRODUCT_CATEGORIES = ['Books & Guides', 'Sets & Tiles', 'Accessories', 'Entertaining']
+const PRODUCT_CATEGORIES = ['Sets & Tiles', 'Accessories', 'Entertaining']
 
 const EMPTY_EVENT = {
   'Event Name': '', 'Date': '', 'Time': '', 'Venue': '', 'Address': '',
@@ -12,7 +12,7 @@ const EMPTY_EVENT = {
   'Registration Link': '', 'Max Spots': '', 'Image URL': '',
 }
 const EMPTY_PRODUCT = {
-  'Product Name': '', 'Category': 'Books & Guides', 'Image URL': '',
+  'Product Name': '', 'Category': 'Sets & Tiles', 'Image URL': '',
   'Buy Link': '', 'Price': '', 'Description': '',
 }
 const EMPTY_TESTIMONIAL = { 'Name': '', 'Quote': '', 'Date': '' }

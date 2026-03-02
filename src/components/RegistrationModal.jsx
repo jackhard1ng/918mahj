@@ -61,7 +61,8 @@ async function addAttendeeToStorage(event, name, contact) {
 
 function getPaymentUrl(label, value) {
   if (label === 'Venmo') return `https://venmo.com/${value.replace('@', '')}`
-  if (label === 'PayPal') return `https://paypal.me/${value}`
+  if (label === 'PayPal') return `https://www.paypal.biz/${value}`
+  if (label === 'Zelle') return 'https://www.zellepay.com/how-it-works'
   return null
 }
 
@@ -172,7 +173,7 @@ export default function RegistrationModal({ event, onClose }) {
                 <div className="space-y-2">
                   <PaymentOption label="Venmo" value={CONTACT.venmo} color="bg-[#3D95CE]" icon="V" />
                   <PaymentOption label="PayPal" value={CONTACT.paypal} color="bg-[#0070BA]" icon="P" />
-                  <PaymentOption label="Zelle" value={CONTACT.zelle} color="bg-[#6D1ED4]" icon="Z" hint="Open your bank app → Send with Zelle → enter email above" />
+                  <PaymentOption label="Zelle" value={CONTACT.zelle} color="bg-[#6D1ED4]" icon="Z" hint="Open your bank app or Zelle → Send → enter email above" />
                 </div>
                 <div className="mt-3 p-3 bg-yellow/30 border-2 border-yellow rounded-lg">
                   <p className="text-xs font-bold text-charcoal uppercase tracking-wide mb-1">Include this in your memo</p>
