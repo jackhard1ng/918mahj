@@ -53,7 +53,29 @@ function isPast(dateStr) {
   return d < today
 }
 
+function compressImage(file) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      const MAX = 600
+      let w = img.width, h = img.height
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX }
+        else { w = Math.round(w * MAX / h); h = MAX }
+      }
+      canvas.width = w
+      canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', 0.7))
+    }
+    img.onerror = () => resolve(null)
+    img.src = URL.createObjectURL(file)
+  })
+}
+
 function ImageUpload({ value, onChange, showToast }) {
+  const [uploading, setUploading] = useState(false)
   return (
     <div>
       <label className="block text-sm font-semibold text-charcoal mb-1">Image</label>
@@ -65,25 +87,27 @@ function ImageUpload({ value, onChange, showToast }) {
         </div>
       )}
       <div className="flex gap-2">
-        <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-gray-200 rounded-lg text-sm text-charcoal-light hover:border-teal hover:text-teal transition-colors cursor-pointer">
+        <label className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-gray-200 rounded-lg text-sm text-charcoal-light hover:border-teal hover:text-teal transition-colors cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
-          Upload Photo
-          <input type="file" accept="image/*" className="hidden" onChange={e => {
+          {uploading ? 'Compressing...' : 'Upload Photo'}
+          <input type="file" accept="image/*" className="hidden" onChange={async e => {
             const file = e.target.files?.[0]
             if (!file) return
-            if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2MB'); return }
-            const reader = new FileReader()
-            reader.onload = () => onChange(reader.result)
-            reader.readAsDataURL(file)
+            if (file.size > 5 * 1024 * 1024) { showToast('Image must be under 5MB'); return }
+            setUploading(true)
+            const compressed = await compressImage(file)
+            setUploading(false)
+            if (compressed) { onChange(compressed); showToast('Image uploaded') }
+            else showToast('Failed to process image')
             e.target.value = ''
           }} />
         </label>
         <span className="text-xs text-charcoal-light self-center">or</span>
-        <input type="text" value={value?.startsWith('data:') ? '' : value}
+        <input type="text" value={value?.startsWith('data:') ? '' : (value || '')}
           onChange={e => onChange(e.target.value)} placeholder="Paste image URL"
           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal" />
       </div>
-      <p className="text-xs text-charcoal-light/50 mt-1">Max 2MB. Leave blank for default.</p>
+      <p className="text-xs text-charcoal-light/50 mt-1">Upload compresses to ~50-100KB. Or paste a URL.</p>
     </div>
   )
 }
@@ -143,11 +167,11 @@ export default function Admin() {
     if (stored) { try { setEvents(JSON.parse(stored)) } catch { setEvents([...sheetEvents]) } }
     else setEvents([...sheetEvents])
   }, [sheetEvents])
-  useEffect(() => { if (events.length > 0) localStorage.setItem(STORAGE_KEY, JSON.stringify(events)) }, [events])
+  useEffect(() => { if (events.length > 0) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(events)) } catch { showToast('Storage full — try removing some images') } } }, [events])
 
   // ─── Load / save attendees ───
   useEffect(() => { try { const s = localStorage.getItem(ATTENDEE_STORAGE_KEY); if (s) setAttendees(JSON.parse(s)) } catch {} }, [])
-  useEffect(() => { if (Object.keys(attendees).length > 0) localStorage.setItem(ATTENDEE_STORAGE_KEY, JSON.stringify(attendees)) }, [attendees])
+  useEffect(() => { if (Object.keys(attendees).length > 0) { try { localStorage.setItem(ATTENDEE_STORAGE_KEY, JSON.stringify(attendees)) } catch {} } }, [attendees])
 
   // ─── Load / save products ───
   useEffect(() => {
@@ -155,7 +179,7 @@ export default function Admin() {
     if (stored) { try { setProducts(JSON.parse(stored)) } catch { setProducts([...sheetProducts]) } }
     else setProducts([...sheetProducts])
   }, [sheetProducts])
-  useEffect(() => { if (products.length > 0) localStorage.setItem(SHOP_STORAGE_KEY, JSON.stringify(products)) }, [products])
+  useEffect(() => { if (products.length > 0) { try { localStorage.setItem(SHOP_STORAGE_KEY, JSON.stringify(products)) } catch { showToast('Storage full — try removing some images') } } }, [products])
 
   // ─── Load / save testimonials ───
   useEffect(() => {
@@ -163,7 +187,7 @@ export default function Admin() {
     if (stored) { try { setTestimonials(JSON.parse(stored)) } catch { setTestimonials([...sheetTestimonials]) } }
     else setTestimonials([...sheetTestimonials])
   }, [sheetTestimonials])
-  useEffect(() => { if (testimonials.length > 0) localStorage.setItem(TESTIMONIAL_STORAGE_KEY, JSON.stringify(testimonials)) }, [testimonials])
+  useEffect(() => { if (testimonials.length > 0) { try { localStorage.setItem(TESTIMONIAL_STORAGE_KEY, JSON.stringify(testimonials)) } catch { showToast('Storage full — try removing some images') } } }, [testimonials])
 
   // ─── Attendee helpers ───
   function getAttendeeList(event) { return attendees[getEventId(event)] || [] }
