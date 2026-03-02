@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
 import { EVENT_COLORS } from '../config'
-import { demoEvents } from '../utils/demoData'
 import { useEvents } from '../hooks/useSiteData'
 
 const STORAGE_KEY = 'mahj918_admin_events'
@@ -91,7 +90,7 @@ export default function Admin() {
     const id = getEventId(event)
     setAttendees(prev => ({
       ...prev,
-      [id]: [...(prev[id] || []), { name: newAttendeeName.trim(), paid: false, notes: '' }],
+      [id]: [...(prev[id] || []), { name: newAttendeeName.trim(), paid: true, notes: '' }],
     }))
     setNewAttendeeName('')
     showToast('Attendee added')
@@ -227,12 +226,6 @@ export default function Admin() {
     showToast('Event duplicated')
   }
 
-  function handleResetToDefaults() {
-    localStorage.removeItem(STORAGE_KEY)
-    setEvents([...demoEvents])
-    showToast('Reset to default events')
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
       {/* Header */}
@@ -243,21 +236,13 @@ export default function Admin() {
               <h1 className="font-heading text-3xl">Admin Dashboard</h1>
               <p className="text-gray-300 text-sm mt-1">Manage your events, view stats, and keep everything up to date.</p>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={openAdd}
-                className="bg-teal hover:bg-teal-dark text-white font-semibold px-5 py-2.5 rounded-lg transition-colors cursor-pointer border-none text-sm flex items-center gap-2"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
-                Add Event
-              </button>
-              <button
-                onClick={handleResetToDefaults}
-                className="bg-charcoal-light/50 hover:bg-charcoal-light text-white font-semibold px-4 py-2.5 rounded-lg transition-colors cursor-pointer border border-gray-500 text-sm"
-              >
-                Reset Defaults
-              </button>
-            </div>
+            <button
+              onClick={openAdd}
+              className="bg-teal hover:bg-teal-dark text-white font-semibold px-5 py-2.5 rounded-lg transition-colors cursor-pointer border-none text-sm flex items-center gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
+              Add Event
+            </button>
           </div>
         </div>
       </div>
