@@ -119,11 +119,12 @@ export default function RegistrationModal({ event, onClose }) {
                   <PaymentOption label="PayPal" value={CONTACT.paypal} color="bg-[#0070BA]" icon="P" />
                   <PaymentOption label="Zelle" value={CONTACT.zelle} color="bg-[#6D1ED4]" icon="Z" />
                 </div>
-                <div className="mt-3 p-2.5 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-charcoal"><strong>Memo:</strong> {event['Event Name']} &mdash; {event['Date']}</p>
+                <div className="mt-3 p-3 bg-yellow/30 border-2 border-yellow rounded-lg">
+                  <p className="text-xs font-bold text-charcoal uppercase tracking-wide mb-1">Include this in your memo</p>
+                  <p className="text-sm font-semibold text-charcoal">{event['Event Name']} &mdash; {event['Date']}</p>
                 </div>
                 <p className="text-xs text-charcoal-light/70 mt-2 text-center">
-                  Please include the event name in your memo. If payment is not received, we may reach out using the contact info you provided.
+                  We need the event name in your memo to confirm your spot. If payment is not received, we may reach out using the contact info you provided.
                 </p>
               </div>
             )}
