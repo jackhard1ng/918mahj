@@ -108,9 +108,11 @@ export default function RegistrationModal({ event, onClose }) {
             {/* Payment info for paid events */}
             {!isFree && (
               <div className="mt-5 text-left">
-                <div className="bg-yellow/20 rounded-lg p-3 mb-3">
-                  <p className="text-sm font-semibold text-charcoal mb-0.5">Complete your registration</p>
-                  <p className="text-xs text-charcoal-light">Send <strong>{event['Price']}</strong> via one of the methods below to secure your spot.</p>
+                <div className="bg-coral/10 rounded-lg p-3 mb-3">
+                  <p className="text-sm font-semibold text-coral mb-0.5">Send payment to confirm your spot</p>
+                  <p className="text-xs text-charcoal-light">
+                    Your spot is reserved but not confirmed until we receive <strong>{event['Price']}</strong>. Please send payment using one of the options below.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <PaymentOption label="Venmo" value={CONTACT.venmo} color="bg-[#3D95CE]" icon="V" />
@@ -120,7 +122,9 @@ export default function RegistrationModal({ event, onClose }) {
                 <div className="mt-3 p-2.5 bg-gray-50 rounded-lg">
                   <p className="text-xs text-charcoal"><strong>Memo:</strong> {event['Event Name']} &mdash; {event['Date']}</p>
                 </div>
-                <p className="text-xs text-charcoal-light/70 mt-2 text-center">Include the event name in your payment memo so we can confirm your spot!</p>
+                <p className="text-xs text-charcoal-light/70 mt-2 text-center">
+                  Please include the event name in your memo. If payment is not received, we may reach out using the contact info you provided.
+                </p>
               </div>
             )}
 
