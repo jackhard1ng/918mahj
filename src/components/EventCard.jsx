@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { EVENT_COLORS } from '../config'
-import PaymentModal from './PaymentModal'
 import RegistrationModal from './RegistrationModal'
 
 function DefaultEventImage({ eventType }) {
@@ -68,22 +67,13 @@ function formatDate(dateStr) {
 }
 
 export default function EventCard({ event, compact = false }) {
-  const [showPayment, setShowPayment] = useState(false)
   const [showRegistration, setShowRegistration] = useState(false)
   const colors = EVENT_COLORS[event['Event Type']] || EVENT_COLORS['Open Play']
   const hasImage = event['Image URL'] && event['Image URL'].trim()
-  const hasRegLink = event['Registration Link'] && event['Registration Link'].trim()
-  const isPaymentLink = hasRegLink && /venmo|paypal|zelle/i.test(event['Registration Link'])
   const isFree = /free/i.test(event['Price'] || '')
 
   const handleRegister = () => {
-    if (isFree) {
-      setShowRegistration(true)
-    } else if (isPaymentLink || !hasRegLink) {
-      setShowPayment(true)
-    } else {
-      window.open(event['Registration Link'], '_blank', 'noopener')
-    }
+    setShowRegistration(true)
   }
 
   if (compact) {
@@ -160,7 +150,6 @@ export default function EventCard({ event, compact = false }) {
         </div>
       </div>
 
-      {showPayment && <PaymentModal event={event} onClose={() => setShowPayment(false)} />}
       {showRegistration && <RegistrationModal event={event} onClose={() => setShowRegistration(false)} />}
     </>
   )

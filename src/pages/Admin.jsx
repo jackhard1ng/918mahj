@@ -170,7 +170,7 @@ export default function Admin() {
   function addAttendee(event) {
     if (!newAttendeeName.trim()) return
     const id = getEventId(event)
-    setAttendees(prev => ({ ...prev, [id]: [...(prev[id] || []), { name: newAttendeeName.trim(), paid: true, notes: '' }] }))
+    setAttendees(prev => ({ ...prev, [id]: [...(prev[id] || []), { name: newAttendeeName.trim(), contact: '', paid: false, notes: 'Added by admin' }] }))
     setNewAttendeeName(''); showToast('Attendee added')
   }
   function toggleAttendeePaid(event, idx) {
@@ -683,27 +683,39 @@ export default function Admin() {
                   <button onClick={() => addAttendee(event)} className="px-4 py-2 bg-teal text-white font-semibold rounded-lg text-sm hover:bg-teal-dark transition-colors cursor-pointer border-none">Add</button>
                 </div>
               </div>
-              <div className="max-h-80 overflow-y-auto">
+              <div className="max-h-96 overflow-y-auto">
                 {list.length === 0 ? (
-                  <div className="p-8 text-center text-charcoal-light text-sm">No attendees yet.</div>
+                  <div className="p-8 text-center text-charcoal-light text-sm">
+                    <p>No attendees yet.</p>
+                    <p className="text-xs mt-1">People will appear here when they register on the site.</p>
+                  </div>
                 ) : (
                   <div className="divide-y divide-gray-50">
                     {list.map((attendee, idx) => (
-                      <div key={idx} className="px-4 py-3 flex items-center gap-3 hover:bg-gray-50">
-                        <button onClick={() => toggleAttendeePaid(event, idx)}
-                          className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 cursor-pointer transition-colors ${attendee.paid ? 'bg-teal border-teal text-white' : 'bg-white border-gray-300 text-transparent hover:border-teal'}`}
-                          title={attendee.paid ? 'Mark unpaid' : 'Mark paid'}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-semibold ${attendee.paid ? 'text-charcoal' : 'text-charcoal-light'}`}>{attendee.name}</p>
-                          <input type="text" value={attendee.notes} onChange={e => updateAttendeeNotes(event, idx, e.target.value)}
-                            placeholder="Notes (optional)" className="w-full text-xs text-charcoal-light/70 border-none bg-transparent focus:outline-none placeholder:text-charcoal-light/40 p-0 mt-0.5" />
+                      <div key={idx} className={`px-4 py-3 hover:bg-gray-50 ${!attendee.paid ? 'bg-coral/5' : ''}`}>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => toggleAttendeePaid(event, idx)}
+                            className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 cursor-pointer transition-colors ${attendee.paid ? 'bg-teal border-teal text-white' : 'bg-white border-gray-300 text-transparent hover:border-teal'}`}
+                            title={attendee.paid ? 'Mark unpaid' : 'Mark paid'}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold ${attendee.paid ? 'text-charcoal' : 'text-coral'}`}>{attendee.name}</p>
+                            {attendee.contact && (
+                              <p className="text-xs text-charcoal-light mt-0.5 flex items-center gap-1">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" /></svg>
+                                {attendee.contact}
+                              </p>
+                            )}
+                          </div>
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${attendee.paid ? 'bg-teal/10 text-teal' : 'bg-coral/10 text-coral'}`}>{attendee.paid ? 'Paid' : 'Unpaid'}</span>
+                          <button onClick={() => removeAttendee(event, idx)} className="p-1 rounded hover:bg-coral/10 text-charcoal-light hover:text-coral transition-colors cursor-pointer border-none bg-transparent shrink-0" title="Remove">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                          </button>
                         </div>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${attendee.paid ? 'bg-teal/10 text-teal' : 'bg-coral/10 text-coral'}`}>{attendee.paid ? 'Paid' : 'Unpaid'}</span>
-                        <button onClick={() => removeAttendee(event, idx)} className="p-1 rounded hover:bg-coral/10 text-charcoal-light hover:text-coral transition-colors cursor-pointer border-none bg-transparent shrink-0" title="Remove">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
-                        </button>
+                        {attendee.notes && (
+                          <p className="text-xs text-charcoal-light/60 ml-10 mt-1">{attendee.notes}</p>
+                        )}
                       </div>
                     ))}
                   </div>
