@@ -83,8 +83,8 @@ export default function RegistrationModal({ event, onClose }) {
   function handleCheck() {
     if (!checkName.trim()) return
     const attendees = getAttendees(event)
-    const found = attendees.some(a => a.name.toLowerCase() === checkName.trim().toLowerCase())
-    setCheckResult({ found, name: checkName.trim() })
+    const match = attendees.find(a => a.name.toLowerCase() === checkName.trim().toLowerCase())
+    setCheckResult({ found: !!match, name: checkName.trim(), paid: match?.paid || false })
   }
 
   return (
@@ -206,12 +206,24 @@ export default function RegistrationModal({ event, onClose }) {
                   Check Registration
                 </button>
                 {checkResult && (
-                  <div className={`mt-3 p-3 rounded-lg ${checkResult.found ? 'bg-teal/10' : 'bg-coral/10'}`}>
+                  <div className={`mt-3 p-3 rounded-lg ${checkResult.found ? (checkResult.paid ? 'bg-teal/10' : 'bg-yellow/20') : 'bg-coral/10'}`}>
                     {checkResult.found ? (
-                      <div className="flex items-center gap-2">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ECDC4" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
-                        <p className="text-sm text-teal font-semibold">{checkResult.name} is registered!</p>
-                      </div>
+                      checkResult.paid ? (
+                        <div className="flex items-center gap-2">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ECDC4" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
+                          <p className="text-sm text-teal font-semibold">{checkResult.name} is registered and payment has been received!</p>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+                            <p className="text-sm text-league-gold font-semibold">{checkResult.name} is registered — payment pending</p>
+                          </div>
+                          {!isFree && (
+                            <p className="text-xs text-charcoal-light mt-1.5 ml-6.5">Your spot is reserved but not confirmed until payment is received. Please send {event['Price']} to complete your registration.</p>
+                          )}
+                        </div>
+                      )
                     ) : (
                       <div className="flex items-center gap-2">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF6B6B" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M15 9l-6 6M9 9l6 6" /></svg>
