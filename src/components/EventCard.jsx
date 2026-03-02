@@ -2,6 +2,19 @@ import { useState } from 'react'
 import { EVENT_COLORS } from '../config'
 import RegistrationModal from './RegistrationModal'
 
+const ATTENDEE_STORAGE_KEY = 'mahj918_admin_attendees'
+
+function getRegisteredCount(event) {
+  try {
+    const stored = localStorage.getItem(ATTENDEE_STORAGE_KEY)
+    const all = stored ? JSON.parse(stored) : {}
+    const id = `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
+    return (all[id] || []).length
+  } catch {
+    return 0
+  }
+}
+
 function DefaultEventImage({ eventType }) {
   const themes = {
     'Open Play': { bg: 'bg-teal', pattern: 'Teal mahjong tiles', emoji: 'open-play' },
@@ -68,12 +81,21 @@ function formatDate(dateStr) {
 
 export default function EventCard({ event, compact = false }) {
   const [showRegistration, setShowRegistration] = useState(false)
+  const [, forceUpdate] = useState(0)
   const colors = EVENT_COLORS[event['Event Type']] || EVENT_COLORS['Open Play']
   const hasImage = event['Image URL'] && event['Image URL'].trim()
   const isFree = /free/i.test(event['Price'] || '')
+  const maxSpots = parseInt(event['Max Spots']) || 0
+  const registered = getRegisteredCount(event)
+  const spotsLeft = maxSpots > 0 ? maxSpots - registered : 0
 
   const handleRegister = () => {
     setShowRegistration(true)
+  }
+
+  const handleCloseRegistration = () => {
+    setShowRegistration(false)
+    forceUpdate(n => n + 1) // re-read attendee count after modal closes
   }
 
   if (compact) {
@@ -133,9 +155,13 @@ export default function EventCard({ event, compact = false }) {
             <p className="text-sm text-charcoal-light mb-4 line-clamp-2">{event['Description']}</p>
           )}
 
-          {event['Max Spots'] && (
-            <p className="text-xs text-charcoal-light mb-3">
-              <span className="font-semibold">{event['Max Spots']}</span> spots available
+          {maxSpots > 0 && (
+            <p className={`text-xs mb-3 ${spotsLeft <= 3 && spotsLeft > 0 ? 'text-coral font-semibold' : spotsLeft === 0 ? 'text-coral font-semibold' : 'text-charcoal-light'}`}>
+              {spotsLeft > 0 ? (
+                <><span className="font-semibold">{spotsLeft}</span> of {maxSpots} spots left</>
+              ) : (
+                'Event is full'
+              )}
             </p>
           )}
 
@@ -150,7 +176,7 @@ export default function EventCard({ event, compact = false }) {
         </div>
       </div>
 
-      {showRegistration && <RegistrationModal event={event} onClose={() => setShowRegistration(false)} />}
+      {showRegistration && <RegistrationModal event={event} onClose={handleCloseRegistration} />}
     </>
   )
 }
