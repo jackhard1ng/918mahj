@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { EVENT_COLORS } from '../config'
 import RegistrationModal from './RegistrationModal'
-import { isFirebaseReady, fetchAttendees } from '../services/db'
+import { isFirebaseReady, fetchAttendees, subscribeToAttendees, getEventId } from '../services/db'
 
 const ATTENDEE_STORAGE_KEY = 'mahj918_admin_attendees'
 
@@ -9,7 +9,7 @@ function getRegisteredCountLocal(event) {
   try {
     const stored = localStorage.getItem(ATTENDEE_STORAGE_KEY)
     const all = stored ? JSON.parse(stored) : {}
-    const id = `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
+    const id = getEventId(event)
     return (all[id] || []).length
   } catch {
     return 0
@@ -90,25 +90,21 @@ export default function EventCard({ event, compact = false }) {
   const maxSpots = parseInt(event['Max Spots']) || 0
   const spotsLeft = maxSpots > 0 ? maxSpots - registered : 0
 
-  // Load attendee count (from Firebase or localStorage)
+  // Real-time attendee count (updates when anyone registers from any device)
   useEffect(() => {
-    loadCount()
-  }, [event['Event Name'], event['Date'], event['Time']])
-
-  async function loadCount() {
-    const id = `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
-    // Try Firebase first, fall back to localStorage
-    if (isFirebaseReady()) {
-      try {
-        const all = await fetchAttendees()
-        if (Object.keys(all).length > 0) {
-          setRegistered((all[id] || []).length)
-          return
-        }
-      } catch (e) { console.error('Firebase attendee read failed:', e) }
-    }
+    const id = getEventId(event)
+    // Start with localStorage
     setRegistered(getRegisteredCountLocal(event))
-  }
+
+    if (!isFirebaseReady()) return
+
+    // Subscribe to real-time updates from Firestore
+    const unsub = subscribeToAttendees((docs) => {
+      const match = docs.find(d => d._id === id)
+      setRegistered(match?.list?.length || 0)
+    })
+    return unsub
+  }, [event['Event Name'], event['Date'], event['Time']])
 
   const handleRegister = () => {
     setShowRegistration(true)
@@ -116,7 +112,7 @@ export default function EventCard({ event, compact = false }) {
 
   const handleCloseRegistration = () => {
     setShowRegistration(false)
-    loadCount() // re-read attendee count after modal closes
+    // Real-time listener handles the count update automatically
   }
 
   if (compact) {
@@ -184,7 +180,7 @@ export default function EventCard({ event, compact = false }) {
             </div>
           )}
 
-          {maxSpots > 0 && (
+          {maxSpots > 0 ? (
             <p className={`text-xs mb-3 ${spotsLeft <= 3 && spotsLeft > 0 ? 'text-coral font-semibold' : spotsLeft === 0 ? 'text-coral font-semibold' : 'text-charcoal-light'}`}>
               {spotsLeft > 0 ? (
                 <><span className="font-semibold">{spotsLeft}</span> of {maxSpots} spots left</>
@@ -192,7 +188,11 @@ export default function EventCard({ event, compact = false }) {
                 'Event is full'
               )}
             </p>
-          )}
+          ) : registered > 0 ? (
+            <p className="text-xs mb-3 text-teal font-semibold">
+              {registered} {registered === 1 ? 'person' : 'people'} joined
+            </p>
+          ) : null}
 
           <div className="mt-auto">
             <button

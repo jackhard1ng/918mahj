@@ -1,12 +1,8 @@
 import { useState } from 'react'
 import { CONTACT } from '../config'
-import { isFirebaseReady, fetchAttendees, saveEventAttendees } from '../services/db'
+import { isFirebaseReady, fetchAttendees, saveEventAttendees, getEventId } from '../services/db'
 
 const ATTENDEE_STORAGE_KEY = 'mahj918_admin_attendees'
-
-function getEventId(event) {
-  return `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
-}
 
 function getLocalAttendees() {
   try {

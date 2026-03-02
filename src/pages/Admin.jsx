@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { EVENT_COLORS } from '../config'
 import { useEvents, useShop, useTestimonials, useGallery } from '../hooks/useSiteData'
-import { isFirebaseReady, saveCollection, fetchAttendees, saveAttendees, uploadImage, addGalleryPhoto, deleteGalleryPhoto, COLLECTIONS } from '../services/db'
+import { isFirebaseReady, saveCollection, fetchAttendees, saveAttendees, saveEventAttendees, subscribeToAttendees, uploadImage, addGalleryPhoto, deleteGalleryPhoto, getEventId, COLLECTIONS } from '../services/db'
 
 const EVENT_TYPES = ['Open Play', 'Birdy Basics', 'League', 'Special Event', 'Private']
 const PRODUCT_CATEGORIES = ['Books & Guides', 'Sets & Tiles', 'Accessories', 'Entertaining']
@@ -30,9 +30,7 @@ function saveLocalAttendees(all) {
   try { localStorage.setItem(ATTENDEE_STORAGE_KEY, JSON.stringify(all)) } catch {}
 }
 
-function getEventId(event) {
-  return `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
-}
+// getEventId imported from ../services/db
 
 function formatDateForInput(dateStr) {
   if (!dateStr) return ''
@@ -197,22 +195,23 @@ export default function Admin() {
   useEffect(() => { setProducts([...sheetProducts]) }, [sheetProducts])
   useEffect(() => { setTestimonials([...sheetTestimonials]) }, [sheetTestimonials])
 
-  // Load attendees (Firebase first, fall back to localStorage)
+  // Load attendees — real-time subscription so cross-device registrations appear live
   useEffect(() => {
-    async function loadAttendees() {
-      if (firebaseOn) {
-        try {
-          const fbData = await fetchAttendees()
-          if (Object.keys(fbData).length > 0) {
-            setAttendees(fbData)
-            saveLocalAttendees(fbData) // sync to localStorage
-            return
-          }
-        } catch (e) { console.error('Firebase attendee load failed:', e) }
+    // Start with localStorage immediately
+    setAttendees(getLocalAttendees())
+
+    if (!firebaseOn) return
+
+    // Subscribe to real-time Firestore updates
+    const unsub = subscribeToAttendees((docs) => {
+      const map = {}
+      docs.forEach((d) => { map[d._id] = d.list || [] })
+      if (Object.keys(map).length > 0) {
+        setAttendees(map)
+        saveLocalAttendees(map) // keep localStorage in sync
       }
-      setAttendees(getLocalAttendees())
-    }
-    loadAttendees()
+    })
+    return unsub
   }, [firebaseOn])
 
   // ─── Persist helpers ───
@@ -240,14 +239,18 @@ export default function Admin() {
       setSaving(false)
     }
   }
-  async function persistAttendees(next) {
+  async function persistAttendees(next, changedEventId) {
     setAttendees(next)
     // Always save to localStorage first (guaranteed to work)
     saveLocalAttendees(next)
-    // Then try Firebase
+    // Then try Firebase — write only the changed event doc to avoid race conditions
     if (firebaseOn) {
       try {
-        await saveAttendees(next)
+        if (changedEventId) {
+          await saveEventAttendees(changedEventId, next[changedEventId] || [])
+        } else {
+          await saveAttendees(next)
+        }
       } catch (e) { console.error('Firebase attendee save failed:', e) }
     }
   }
@@ -258,24 +261,24 @@ export default function Admin() {
     if (!newAttendeeName.trim()) return
     const id = getEventId(event)
     const next = { ...attendees, [id]: [...(attendees[id] || []), { name: newAttendeeName.trim(), contact: '', paid: false, notes: 'Added by admin' }] }
-    persistAttendees(next)
+    persistAttendees(next, id)
     setNewAttendeeName(''); showToast('Attendee added')
   }
   function toggleAttendeePaid(event, idx) {
     const id = getEventId(event)
     const next = { ...attendees, [id]: (attendees[id] || []).map((a, i) => i === idx ? { ...a, paid: !a.paid } : a) }
-    persistAttendees(next)
+    persistAttendees(next, id)
   }
   function removeAttendee(event, idx) {
     const id = getEventId(event)
     const next = { ...attendees, [id]: (attendees[id] || []).filter((_, i) => i !== idx) }
-    persistAttendees(next)
+    persistAttendees(next, id)
     showToast('Attendee removed')
   }
   function updateAttendeeNotes(event, idx, notes) {
     const id = getEventId(event)
     const next = { ...attendees, [id]: (attendees[id] || []).map((a, i) => i === idx ? { ...a, notes } : a) }
-    persistAttendees(next)
+    persistAttendees(next, id)
   }
 
   // ─── Event stats & filtering ───

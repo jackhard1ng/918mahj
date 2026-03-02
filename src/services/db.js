@@ -116,6 +116,11 @@ export async function deleteImage(url) {
   }
 }
 
+// ─── Event ID helper (Firestore-safe: no slashes, quotes, dots) ───
+export function getEventId(event) {
+  return `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/[^a-zA-Z0-9_-]/g, '_')
+}
+
 // ─── Attendees (stored as a single document per event) ───
 export function subscribeToAttendees(callback) {
   return subscribeToCollection(COLLECTIONS.attendees, callback)
