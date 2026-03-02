@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { EVENT_COLORS } from '../config'
 import RegistrationModal from './RegistrationModal'
+import { isFirebaseReady, fetchAttendees } from '../services/db'
 
 const ATTENDEE_STORAGE_KEY = 'mahj918_admin_attendees'
 
-function getRegisteredCount(event) {
+function getRegisteredCountLocal(event) {
   try {
     const stored = localStorage.getItem(ATTENDEE_STORAGE_KEY)
     const all = stored ? JSON.parse(stored) : {}
@@ -82,13 +83,27 @@ function formatDate(dateStr) {
 export default function EventCard({ event, compact = false }) {
   const [showRegistration, setShowRegistration] = useState(false)
   const [expanded, setExpanded] = useState(false)
-  const [, forceUpdate] = useState(0)
+  const [registered, setRegistered] = useState(0)
   const colors = EVENT_COLORS[event['Event Type']] || EVENT_COLORS['Open Play']
   const hasImage = event['Image URL'] && event['Image URL'].trim()
   const isFree = /free/i.test(event['Price'] || '')
   const maxSpots = parseInt(event['Max Spots']) || 0
-  const registered = getRegisteredCount(event)
   const spotsLeft = maxSpots > 0 ? maxSpots - registered : 0
+
+  // Load attendee count (from Firebase or localStorage)
+  useEffect(() => {
+    loadCount()
+  }, [event['Event Name'], event['Date'], event['Time']])
+
+  async function loadCount() {
+    if (isFirebaseReady()) {
+      const all = await fetchAttendees()
+      const id = `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
+      setRegistered((all[id] || []).length)
+    } else {
+      setRegistered(getRegisteredCountLocal(event))
+    }
+  }
 
   const handleRegister = () => {
     setShowRegistration(true)
@@ -96,7 +111,7 @@ export default function EventCard({ event, compact = false }) {
 
   const handleCloseRegistration = () => {
     setShowRegistration(false)
-    forceUpdate(n => n + 1) // re-read attendee count after modal closes
+    loadCount() // re-read attendee count after modal closes
   }
 
   if (compact) {

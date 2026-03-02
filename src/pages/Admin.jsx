@@ -1,11 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { EVENT_COLORS } from '../config'
-import { useEvents, useShop, useTestimonials } from '../hooks/useSiteData'
+import { useEvents, useShop, useTestimonials, useGallery } from '../hooks/useSiteData'
+import { isFirebaseReady, saveCollection, fetchAttendees, saveAttendees, uploadImage, addGalleryPhoto, deleteGalleryPhoto, COLLECTIONS } from '../services/db'
 
-const STORAGE_KEY = 'mahj918_admin_events'
-const SHOP_STORAGE_KEY = 'mahj918_admin_shop'
-const TESTIMONIAL_STORAGE_KEY = 'mahj918_admin_testimonials'
-const ATTENDEE_STORAGE_KEY = 'mahj918_admin_attendees'
 const EVENT_TYPES = ['Open Play', 'Birdy Basics', 'League', 'Special Event', 'Private']
 const PRODUCT_CATEGORIES = ['Books & Guides', 'Sets & Tiles', 'Accessories', 'Entertaining']
 
@@ -67,14 +64,14 @@ function compressImage(file) {
       canvas.width = w
       canvas.height = h
       canvas.getContext('2d').drawImage(img, 0, 0, w, h)
-      resolve(canvas.toDataURL('image/jpeg', 0.7))
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.7)
     }
     img.onerror = () => resolve(null)
     img.src = URL.createObjectURL(file)
   })
 }
 
-function ImageUpload({ value, onChange, showToast }) {
+function ImageUpload({ value, onChange, showToast, storagePrefix }) {
   const [uploading, setUploading] = useState(false)
   return (
     <div>
@@ -89,25 +86,35 @@ function ImageUpload({ value, onChange, showToast }) {
       <div className="flex gap-2">
         <label className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-gray-200 rounded-lg text-sm text-charcoal-light hover:border-teal hover:text-teal transition-colors cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
-          {uploading ? 'Compressing...' : 'Upload Photo'}
+          {uploading ? 'Uploading...' : 'Upload Photo'}
           <input type="file" accept="image/*" className="hidden" onChange={async e => {
             const file = e.target.files?.[0]
             if (!file) return
-            if (file.size > 5 * 1024 * 1024) { showToast('Image must be under 5MB'); return }
+            if (file.size > 10 * 1024 * 1024) { showToast('Image must be under 10MB'); return }
             setUploading(true)
             const compressed = await compressImage(file)
-            setUploading(false)
-            if (compressed) { onChange(compressed); showToast('Image uploaded') }
-            else showToast('Failed to process image')
+            if (!compressed) { setUploading(false); showToast('Failed to process image'); return }
+            if (isFirebaseReady()) {
+              const path = `${storagePrefix || 'images'}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`
+              const url = await uploadImage(compressed, path)
+              setUploading(false)
+              if (url) { onChange(url); showToast('Image uploaded') }
+              else showToast('Upload failed — check Firebase Storage')
+            } else {
+              // Fallback: base64 for localStorage
+              const reader = new FileReader()
+              reader.onload = () => { setUploading(false); onChange(reader.result); showToast('Image uploaded') }
+              reader.onerror = () => { setUploading(false); showToast('Failed to process image') }
+              reader.readAsDataURL(compressed)
+            }
             e.target.value = ''
           }} />
         </label>
         <span className="text-xs text-charcoal-light self-center">or</span>
-        <input type="text" value={value?.startsWith('data:') ? '' : (value || '')}
+        <input type="text" value={value?.startsWith('data:') ? '' : (value?.startsWith('http') ? value : '') || ''}
           onChange={e => onChange(e.target.value)} placeholder="Paste image URL"
           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal" />
       </div>
-      <p className="text-xs text-charcoal-light/50 mt-1">Upload compresses to ~50-100KB. Or paste a URL.</p>
     </div>
   )
 }
@@ -119,7 +126,7 @@ function DeleteModal({ name, onCancel, onDelete }) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-fade-in-up">
         <h3 className="font-heading text-lg text-charcoal mb-2">Delete?</h3>
         <p className="text-sm text-charcoal-light mb-4">
-          Are you sure you want to delete <strong>{name}</strong>? This can't be undone.
+          Are you sure you want to delete <strong>{name}</strong>? This can&apos;t be undone.
         </p>
         <div className="flex justify-end gap-2">
           <button onClick={onCancel} className="px-4 py-2 rounded-lg border border-gray-200 text-charcoal-light font-semibold text-sm hover:bg-gray-50 transition-colors cursor-pointer bg-white">Cancel</button>
@@ -133,7 +140,10 @@ function DeleteModal({ name, onCancel, onDelete }) {
 export default function Admin() {
   const [tab, setTab] = useState('events')
   const [toast, setToast] = useState(null)
+  const [saving, setSaving] = useState(false)
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3000) }
+
+  const firebaseOn = isFirebaseReady()
 
   // ─── Events state ───
   const { allEvents: sheetEvents } = useEvents()
@@ -161,54 +171,82 @@ export default function Admin() {
   const [testimonialForm, setTestimonialForm] = useState({ ...EMPTY_TESTIMONIAL })
   const [testimonialDelete, setTestimonialDelete] = useState(null)
 
-  // ─── Load / save events ───
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) { try { setEvents(JSON.parse(stored)) } catch { setEvents([...sheetEvents]) } }
-    else setEvents([...sheetEvents])
-  }, [sheetEvents])
-  useEffect(() => { if (events.length > 0) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(events)) } catch { showToast('Storage full — try removing some images') } } }, [events])
+  // ─── Gallery state ───
+  const { photos: galleryPhotos } = useGallery()
+  const [galleryUploading, setGalleryUploading] = useState(false)
+  const [galleryCaption, setGalleryCaption] = useState('')
+  const [galleryEvent, setGalleryEvent] = useState('')
+  const [galleryDelete, setGalleryDelete] = useState(null)
 
-  // ─── Load / save attendees ───
-  useEffect(() => { try { const s = localStorage.getItem(ATTENDEE_STORAGE_KEY); if (s) setAttendees(JSON.parse(s)) } catch {} }, [])
-  useEffect(() => { if (Object.keys(attendees).length > 0) { try { localStorage.setItem(ATTENDEE_STORAGE_KEY, JSON.stringify(attendees)) } catch {} } }, [attendees])
+  // ─── Load data ───
+  // When Firebase is on, sheetEvents already comes from Firestore via useSiteData
+  useEffect(() => { setEvents([...sheetEvents]) }, [sheetEvents])
+  useEffect(() => { setProducts([...sheetProducts]) }, [sheetProducts])
+  useEffect(() => { setTestimonials([...sheetTestimonials]) }, [sheetTestimonials])
 
-  // ─── Load / save products ───
+  // Load attendees
   useEffect(() => {
-    const stored = localStorage.getItem(SHOP_STORAGE_KEY)
-    if (stored) { try { setProducts(JSON.parse(stored)) } catch { setProducts([...sheetProducts]) } }
-    else setProducts([...sheetProducts])
-  }, [sheetProducts])
-  useEffect(() => { if (products.length > 0) { try { localStorage.setItem(SHOP_STORAGE_KEY, JSON.stringify(products)) } catch { showToast('Storage full — try removing some images') } } }, [products])
+    if (firebaseOn) {
+      fetchAttendees().then(setAttendees)
+    }
+  }, [firebaseOn])
 
-  // ─── Load / save testimonials ───
-  useEffect(() => {
-    const stored = localStorage.getItem(TESTIMONIAL_STORAGE_KEY)
-    if (stored) { try { setTestimonials(JSON.parse(stored)) } catch { setTestimonials([...sheetTestimonials]) } }
-    else setTestimonials([...sheetTestimonials])
-  }, [sheetTestimonials])
-  useEffect(() => { if (testimonials.length > 0) { try { localStorage.setItem(TESTIMONIAL_STORAGE_KEY, JSON.stringify(testimonials)) } catch { showToast('Storage full — try removing some images') } } }, [testimonials])
+  // ─── Persist helpers ───
+  async function persistEvents(next) {
+    setEvents(next)
+    if (firebaseOn) {
+      setSaving(true)
+      await saveCollection(COLLECTIONS.events, next)
+      setSaving(false)
+    }
+  }
+  async function persistProducts(next) {
+    setProducts(next)
+    if (firebaseOn) {
+      setSaving(true)
+      await saveCollection(COLLECTIONS.shop, next)
+      setSaving(false)
+    }
+  }
+  async function persistTestimonials(next) {
+    setTestimonials(next)
+    if (firebaseOn) {
+      setSaving(true)
+      await saveCollection(COLLECTIONS.testimonials, next)
+      setSaving(false)
+    }
+  }
+  async function persistAttendees(next) {
+    setAttendees(next)
+    if (firebaseOn) {
+      await saveAttendees(next)
+    }
+  }
 
   // ─── Attendee helpers ───
   function getAttendeeList(event) { return attendees[getEventId(event)] || [] }
   function addAttendee(event) {
     if (!newAttendeeName.trim()) return
     const id = getEventId(event)
-    setAttendees(prev => ({ ...prev, [id]: [...(prev[id] || []), { name: newAttendeeName.trim(), contact: '', paid: false, notes: 'Added by admin' }] }))
+    const next = { ...attendees, [id]: [...(attendees[id] || []), { name: newAttendeeName.trim(), contact: '', paid: false, notes: 'Added by admin' }] }
+    persistAttendees(next)
     setNewAttendeeName(''); showToast('Attendee added')
   }
   function toggleAttendeePaid(event, idx) {
     const id = getEventId(event)
-    setAttendees(prev => ({ ...prev, [id]: (prev[id] || []).map((a, i) => i === idx ? { ...a, paid: !a.paid } : a) }))
+    const next = { ...attendees, [id]: (attendees[id] || []).map((a, i) => i === idx ? { ...a, paid: !a.paid } : a) }
+    persistAttendees(next)
   }
   function removeAttendee(event, idx) {
     const id = getEventId(event)
-    setAttendees(prev => ({ ...prev, [id]: (prev[id] || []).filter((_, i) => i !== idx) }))
+    const next = { ...attendees, [id]: (attendees[id] || []).filter((_, i) => i !== idx) }
+    persistAttendees(next)
     showToast('Attendee removed')
   }
   function updateAttendeeNotes(event, idx, notes) {
     const id = getEventId(event)
-    setAttendees(prev => ({ ...prev, [id]: (prev[id] || []).map((a, i) => i === idx ? { ...a, notes } : a) }))
+    const next = { ...attendees, [id]: (attendees[id] || []).map((a, i) => i === idx ? { ...a, notes } : a) }
+    persistAttendees(next)
   }
 
   // ─── Event stats & filtering ───
@@ -245,13 +283,13 @@ export default function Admin() {
   }
   function saveEvent() {
     if (!eventForm['Event Name']?.trim() || !eventForm['Date']?.trim()) { showToast('Event name and date are required'); return }
-    if (eventEditing === 'new') { setEvents(prev => [...prev, { ...eventForm }]); showToast('Event added') }
-    else { setEvents(prev => prev.map((e, i) => i === eventEditing ? { ...eventForm } : e)); showToast('Event updated') }
+    if (eventEditing === 'new') { persistEvents([...events, { ...eventForm }]); showToast('Event added') }
+    else { persistEvents(events.map((e, i) => i === eventEditing ? { ...eventForm } : e)); showToast('Event updated') }
     setEventEditing(null)
   }
   function deleteEvent(i) {
     const ri = events.indexOf(displayedEvents[i])
-    setEvents(prev => prev.filter((_, idx) => idx !== ri)); setEventDelete(null); showToast('Event deleted')
+    persistEvents(events.filter((_, idx) => idx !== ri)); setEventDelete(null); showToast('Event deleted')
   }
 
   // ─── Product CRUD ───
@@ -259,11 +297,11 @@ export default function Admin() {
   function openProductEdit(i) { setProductForm({ ...products[i] }); setProductEditing(i) }
   function saveProduct() {
     if (!productForm['Product Name']?.trim()) { showToast('Product name is required'); return }
-    if (productEditing === 'new') { setProducts(prev => [...prev, { ...productForm }]); showToast('Product added') }
-    else { setProducts(prev => prev.map((p, i) => i === productEditing ? { ...productForm } : p)); showToast('Product updated') }
+    if (productEditing === 'new') { persistProducts([...products, { ...productForm }]); showToast('Product added') }
+    else { persistProducts(products.map((p, i) => i === productEditing ? { ...productForm } : p)); showToast('Product updated') }
     setProductEditing(null)
   }
-  function deleteProduct(i) { setProducts(prev => prev.filter((_, idx) => idx !== i)); setProductDelete(null); showToast('Product deleted') }
+  function deleteProduct(i) { persistProducts(products.filter((_, idx) => idx !== i)); setProductDelete(null); showToast('Product deleted') }
 
   // ─── Testimonial CRUD ───
   function openTestimonialAdd() {
@@ -274,17 +312,55 @@ export default function Admin() {
   function openTestimonialEdit(i) { setTestimonialForm({ ...testimonials[i] }); setTestimonialEditing(i) }
   function saveTestimonial() {
     if (!testimonialForm['Name']?.trim() || !testimonialForm['Quote']?.trim()) { showToast('Name and quote are required'); return }
-    if (testimonialEditing === 'new') { setTestimonials(prev => [...prev, { ...testimonialForm }]); showToast('Testimonial added') }
-    else { setTestimonials(prev => prev.map((t, i) => i === testimonialEditing ? { ...testimonialForm } : t)); showToast('Testimonial updated') }
+    if (testimonialEditing === 'new') { persistTestimonials([...testimonials, { ...testimonialForm }]); showToast('Testimonial added') }
+    else { persistTestimonials(testimonials.map((t, i) => i === testimonialEditing ? { ...testimonialForm } : t)); showToast('Testimonial updated') }
     setTestimonialEditing(null)
   }
-  function deleteTestimonial(i) { setTestimonials(prev => prev.filter((_, idx) => idx !== i)); setTestimonialDelete(null); showToast('Testimonial deleted') }
+  function deleteTestimonial(i) { persistTestimonials(testimonials.filter((_, idx) => idx !== i)); setTestimonialDelete(null); showToast('Testimonial deleted') }
+
+  // ─── Gallery handlers ───
+  async function handleGalleryUpload(e) {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    if (!firebaseOn) { showToast('Gallery requires Firebase — add your config to .env'); return }
+    setGalleryUploading(true)
+    let count = 0
+    for (const file of files) {
+      if (file.size > 10 * 1024 * 1024) continue
+      const compressed = await compressImage(file)
+      if (!compressed) continue
+      const result = await addGalleryPhoto(compressed, galleryCaption, galleryEvent)
+      if (result) count++
+    }
+    setGalleryUploading(false)
+    setGalleryCaption('')
+    showToast(`${count} photo${count !== 1 ? 's' : ''} uploaded`)
+    e.target.value = ''
+  }
+
+  async function handleGalleryDelete() {
+    if (!galleryDelete) return
+    await deleteGalleryPhoto(galleryDelete)
+    setGalleryDelete(null)
+    showToast('Photo deleted')
+  }
+
+  // ─── Unique event names for gallery tagging ───
+  const eventNames = useMemo(() => [...new Set(events.map(e => e['Event Name']).filter(Boolean))], [events])
 
   const TABS = [
     { key: 'events', label: 'Events', count: events.length },
     { key: 'shop', label: 'Shop', count: products.length },
     { key: 'testimonials', label: 'Testimonials', count: testimonials.length },
+    { key: 'gallery', label: 'Gallery', count: galleryPhotos.length },
   ]
+
+  function handleAddButton() {
+    if (tab === 'events') openEventAdd()
+    else if (tab === 'shop') openProductAdd()
+    else if (tab === 'testimonials') openTestimonialAdd()
+    // Gallery uses file input, no add button
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
@@ -294,13 +370,27 @@ export default function Admin() {
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <h1 className="font-heading text-3xl">Admin Dashboard</h1>
-              <p className="text-gray-300 text-sm mt-1">Manage events, shop, and testimonials.</p>
+              <p className="text-gray-300 text-sm mt-1">
+                {firebaseOn ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-teal inline-block" />
+                    Connected to Firebase {saving && '— saving...'}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-yellow inline-block" />
+                    Local mode — add Firebase config for cross-device sync
+                  </span>
+                )}
+              </p>
             </div>
-            <button onClick={tab === 'events' ? openEventAdd : tab === 'shop' ? openProductAdd : openTestimonialAdd}
-              className="bg-teal hover:bg-teal-dark text-white font-semibold px-5 py-2.5 rounded-lg transition-colors cursor-pointer border-none text-sm flex items-center gap-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
-              Add {tab === 'events' ? 'Event' : tab === 'shop' ? 'Product' : 'Testimonial'}
-            </button>
+            {tab !== 'gallery' && (
+              <button onClick={handleAddButton}
+                className="bg-teal hover:bg-teal-dark text-white font-semibold px-5 py-2.5 rounded-lg transition-colors cursor-pointer border-none text-sm flex items-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
+                Add {tab === 'events' ? 'Event' : tab === 'shop' ? 'Product' : 'Testimonial'}
+              </button>
+            )}
           </div>
           {/* Tabs */}
           <div className="flex gap-1 mt-6">
@@ -504,6 +594,70 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ════════════ GALLERY TAB ════════════ */}
+      {tab === 'gallery' && (
+        <div className="pt-4 pb-12">
+          {/* Upload area */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-4">
+            <h3 className="font-heading text-lg text-charcoal mb-3">Upload Photos</h3>
+            {!firebaseOn && (
+              <div className="mb-4 p-3 bg-yellow/20 rounded-lg text-sm text-charcoal">
+                Gallery requires Firebase. Add your Firebase config to <code className="bg-gray-100 px-1 rounded">.env</code> to enable photo uploads.
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-sm font-semibold text-charcoal mb-1">Caption (optional)</label>
+                <input type="text" value={galleryCaption} onChange={e => setGalleryCaption(e.target.value)}
+                  placeholder="e.g., Open Play Night — Feb 2026"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-charcoal mb-1">Tag an event (optional)</label>
+                <select value={galleryEvent} onChange={e => setGalleryEvent(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal bg-white">
+                  <option value="">No event</option>
+                  {eventNames.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+            </div>
+            <label className={`flex items-center justify-center gap-2 px-4 py-6 border-2 border-dashed rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
+              galleryUploading ? 'border-gray-200 text-charcoal-light opacity-50 pointer-events-none' : 'border-teal/30 text-teal hover:border-teal hover:bg-teal/5'
+            }`}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
+              {galleryUploading ? 'Uploading photos...' : 'Click to upload photos (select multiple)'}
+              <input type="file" accept="image/*" multiple className="hidden" onChange={handleGalleryUpload} disabled={!firebaseOn} />
+            </label>
+          </div>
+
+          {/* Photo grid */}
+          {galleryPhotos.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+              <p className="text-charcoal-light text-lg">No photos yet.</p>
+              <p className="text-charcoal-light/60 text-sm mt-1">Upload photos from past events to create a gallery on your website.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {galleryPhotos.map((photo) => (
+                <div key={photo._id} className="group relative bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden aspect-square">
+                  <img src={photo.url} alt={photo.caption || ''} className="w-full h-full object-cover" loading="lazy" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-end">
+                    <div className="w-full p-2 translate-y-full group-hover:translate-y-0 transition-transform">
+                      {photo.caption && <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>}
+                      {photo.eventName && <p className="text-white/70 text-[10px] truncate">{photo.eventName}</p>}
+                    </div>
+                  </div>
+                  <button onClick={() => setGalleryDelete(photo)}
+                    className="absolute top-2 right-2 w-7 h-7 bg-coral text-white rounded-full flex items-center justify-center cursor-pointer border-none text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       </div>{/* end max-w container */}
 
       {/* ════════════ MODALS ════════════ */}
@@ -579,7 +733,7 @@ export default function Admin() {
                     placeholder="Leave blank for unlimited" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal" />
                 </div>
               </div>
-              <ImageUpload value={eventForm['Image URL']} onChange={v => setEventForm(p => ({ ...p, 'Image URL': v }))} showToast={showToast} />
+              <ImageUpload value={eventForm['Image URL']} onChange={v => setEventForm(p => ({ ...p, 'Image URL': v }))} showToast={showToast} storagePrefix="events" />
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-2">
               <button onClick={() => setEventEditing(null)} className="px-5 py-2.5 rounded-lg border border-gray-200 text-charcoal-light font-semibold text-sm hover:bg-gray-50 transition-colors cursor-pointer bg-white">Cancel</button>
@@ -629,7 +783,7 @@ export default function Admin() {
                 <textarea value={productForm['Description']} onChange={e => setProductForm(p => ({ ...p, 'Description': e.target.value }))}
                   rows={3} placeholder="Describe the product..." className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal resize-vertical" />
               </div>
-              <ImageUpload value={productForm['Image URL']} onChange={v => setProductForm(p => ({ ...p, 'Image URL': v }))} showToast={showToast} />
+              <ImageUpload value={productForm['Image URL']} onChange={v => setProductForm(p => ({ ...p, 'Image URL': v }))} showToast={showToast} storagePrefix="shop" />
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-2">
               <button onClick={() => setProductEditing(null)} className="px-5 py-2.5 rounded-lg border border-gray-200 text-charcoal-light font-semibold text-sm hover:bg-gray-50 transition-colors cursor-pointer bg-white">Cancel</button>
@@ -678,6 +832,7 @@ export default function Admin() {
       {eventDelete !== null && <DeleteModal name={displayedEvents[eventDelete]?.['Event Name']} onCancel={() => setEventDelete(null)} onDelete={() => deleteEvent(eventDelete)} />}
       {productDelete !== null && <DeleteModal name={products[productDelete]?.['Product Name']} onCancel={() => setProductDelete(null)} onDelete={() => deleteProduct(productDelete)} />}
       {testimonialDelete !== null && <DeleteModal name={`${testimonials[testimonialDelete]?.['Name']}'s testimonial`} onCancel={() => setTestimonialDelete(null)} onDelete={() => deleteTestimonial(testimonialDelete)} />}
+      {galleryDelete && <DeleteModal name="this photo" onCancel={() => setGalleryDelete(null)} onDelete={handleGalleryDelete} />}
 
       {/* Attendee Panel */}
       {attendeePanel !== null && displayedEvents[attendeePanel] && (() => {

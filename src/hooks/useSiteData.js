@@ -1,11 +1,8 @@
-import { useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useGoogleSheet } from './useGoogleSheet'
 import { SHEET_URLS } from '../config'
 import { demoEvents, demoShop, demoTestimonials } from '../utils/demoData'
-
-const ADMIN_STORAGE_KEY = 'mahj918_admin_events'
-const ADMIN_SHOP_KEY = 'mahj918_admin_shop'
-const ADMIN_TESTIMONIAL_KEY = 'mahj918_admin_testimonials'
+import { isFirebaseReady, subscribeToCollection, subscribeToGallery } from '../services/db'
 
 function parseEventDate(dateStr) {
   if (!dateStr) return null
@@ -13,20 +10,32 @@ function parseEventDate(dateStr) {
   return new Date(year, month - 1, day)
 }
 
-function getAdminData(key) {
-  try {
-    const stored = localStorage.getItem(key)
-    return stored ? JSON.parse(stored) : null
-  } catch {
-    return null
-  }
+// ─── Firebase real-time hook ───
+function useFirebaseCollection(collectionName) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!isFirebaseReady()) { setLoading(false); return }
+    setLoading(true)
+    const unsub = subscribeToCollection(collectionName, (items) => {
+      setData(items.length > 0 ? items : null)
+      setLoading(false)
+    })
+    return unsub
+  }, [collectionName])
+
+  return { data, loading }
 }
 
 export function useEvents() {
-  const { data, loading, error } = useGoogleSheet(SHEET_URLS.events)
-  const useDemo = !SHEET_URLS.events || (error && !loading)
-  const adminEvents = getAdminData(ADMIN_STORAGE_KEY)
-  const raw = adminEvents || (useDemo ? demoEvents : data)
+  const { data: firebaseData, loading: fbLoading } = useFirebaseCollection('events')
+  const { data: sheetData, loading: sheetLoading, error: sheetError } = useGoogleSheet(SHEET_URLS.events)
+  const useDemo = !isFirebaseReady() && (!SHEET_URLS.events || (sheetError && !sheetLoading))
+
+  // Priority: Firebase > Sheet > Demo
+  const raw = firebaseData || (useDemo ? demoEvents : sheetData)
+  const loading = isFirebaseReady() ? fbLoading : (SHEET_URLS.events ? sheetLoading : false)
 
   const events = useMemo(() => {
     const today = new Date()
@@ -40,21 +49,46 @@ export function useEvents() {
       .sort((a, b) => parseEventDate(a['Date']) - parseEventDate(b['Date']))
   }, [raw])
 
-  return { events, allEvents: raw, loading: SHEET_URLS.events ? loading : false, error: useDemo ? null : error }
+  return { events, allEvents: raw, loading, error: useDemo ? null : sheetError }
 }
 
 export function useShop() {
-  const { data, loading, error } = useGoogleSheet(SHEET_URLS.shop)
-  const useDemo = !SHEET_URLS.shop || (error && !loading)
-  const adminProducts = getAdminData(ADMIN_SHOP_KEY)
-  const products = adminProducts || (useDemo ? demoShop : data)
-  return { products, loading: SHEET_URLS.shop ? loading : false, error: useDemo ? null : error }
+  const { data: firebaseData, loading: fbLoading } = useFirebaseCollection('shop')
+  const { data: sheetData, loading: sheetLoading, error: sheetError } = useGoogleSheet(SHEET_URLS.shop)
+  const useDemo = !isFirebaseReady() && (!SHEET_URLS.shop || (sheetError && !sheetLoading))
+
+  const products = firebaseData || (useDemo ? demoShop : sheetData)
+  const loading = isFirebaseReady() ? fbLoading : (SHEET_URLS.shop ? sheetLoading : false)
+
+  return { products, loading, error: useDemo ? null : sheetError }
 }
 
 export function useTestimonials() {
-  const { data, loading, error } = useGoogleSheet(SHEET_URLS.testimonials)
-  const useDemo = !SHEET_URLS.testimonials || (error && !loading)
-  const adminTestimonials = getAdminData(ADMIN_TESTIMONIAL_KEY)
-  const testimonials = adminTestimonials || (useDemo ? demoTestimonials : data)
-  return { testimonials, loading: SHEET_URLS.testimonials ? loading : false, error: useDemo ? null : error }
+  const { data: firebaseData, loading: fbLoading } = useFirebaseCollection('testimonials')
+  const { data: sheetData, loading: sheetLoading, error: sheetError } = useGoogleSheet(SHEET_URLS.testimonials)
+  const useDemo = !isFirebaseReady() && (!SHEET_URLS.testimonials || (sheetError && !sheetLoading))
+
+  const testimonials = firebaseData || (useDemo ? demoTestimonials : sheetData)
+  const loading = isFirebaseReady() ? fbLoading : (SHEET_URLS.testimonials ? sheetLoading : false)
+
+  return { testimonials, loading, error: useDemo ? null : sheetError }
+}
+
+export function useGallery() {
+  const [photos, setPhotos] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!isFirebaseReady()) { setLoading(false); return }
+    setLoading(true)
+    const unsub = subscribeToGallery((items) => {
+      // Sort newest first
+      items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      setPhotos(items)
+      setLoading(false)
+    })
+    return unsub
+  }, [])
+
+  return { photos, loading }
 }

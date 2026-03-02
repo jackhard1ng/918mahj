@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom'
-import { useEvents, useTestimonials } from '../hooks/useSiteData'
+import { useEvents, useTestimonials, useGallery } from '../hooks/useSiteData'
 import { CONTACT } from '../config'
 import EventCard from '../components/EventCard'
 import TestimonialCarousel from '../components/TestimonialCarousel'
+import PhotoGallery from '../components/PhotoGallery'
 import { CardSkeleton, TestimonialSkeleton, ErrorFallback } from '../components/LoadingSkeleton'
 
 const OFFERINGS = [
@@ -80,6 +81,7 @@ const OFFERINGS = [
 export default function Home() {
   const { events, loading: eventsLoading, error: eventsError } = useEvents()
   const { testimonials, loading: testLoading } = useTestimonials()
+  const { photos } = useGallery()
   const upcomingEvents = events.slice(0, 4)
 
   return (
@@ -209,6 +211,17 @@ export default function Home() {
           ) : null}
         </div>
       </section>
+
+      {/* Photo Gallery */}
+      {photos.length > 0 && (
+        <section className="py-16 px-4 bg-teal-light/30 tile-pattern">
+          <div className="max-w-6xl mx-auto">
+            <h2 className="font-heading text-3xl md:text-4xl text-charcoal text-center mb-3">Good Times at the Table</h2>
+            <p className="text-charcoal-light text-center mb-10">Snapshots from our events &mdash; come make some memories!</p>
+            <PhotoGallery photos={photos} />
+          </div>
+        </section>
+      )}
 
       {/* Social / CTA */}
       <section className="py-16 px-4 bg-gradient-to-r from-teal to-teal-dark text-white">

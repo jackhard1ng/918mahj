@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { CONTACT } from '../config'
+import { isFirebaseReady, fetchAttendees, saveEventAttendees } from '../services/db'
 
 const ATTENDEE_STORAGE_KEY = 'mahj918_admin_attendees'
 
@@ -7,7 +8,11 @@ function getEventId(event) {
   return `${event['Event Name']}_${event['Date']}_${event['Time']}`.replace(/\s+/g, '_')
 }
 
-function getAttendees(event) {
+async function getAttendees(event) {
+  if (isFirebaseReady()) {
+    const all = await fetchAttendees()
+    return all[getEventId(event)] || []
+  }
   try {
     const stored = localStorage.getItem(ATTENDEE_STORAGE_KEY)
     const all = stored ? JSON.parse(stored) : {}
@@ -17,19 +22,29 @@ function getAttendees(event) {
   }
 }
 
-function addAttendeeToStorage(event, name, contact) {
+async function addAttendeeToStorage(event, name, contact) {
   try {
-    const stored = localStorage.getItem(ATTENDEE_STORAGE_KEY)
-    const all = stored ? JSON.parse(stored) : {}
     const id = getEventId(event)
-    const list = all[id] || []
     const isFree = /free/i.test(event['Price'] || '')
-    all[id] = [...list, {
+    const newAttendee = {
       name: name.trim(),
       contact: contact.trim(),
       paid: isFree,
       notes: isFree ? 'Self-registered (free event)' : '',
-    }]
+    }
+
+    if (isFirebaseReady()) {
+      const all = await fetchAttendees()
+      const list = all[id] || []
+      await saveEventAttendees(id, [...list, newAttendee])
+      return true
+    }
+
+    // Fallback: localStorage
+    const stored = localStorage.getItem(ATTENDEE_STORAGE_KEY)
+    const all = stored ? JSON.parse(stored) : {}
+    const list = all[id] || []
+    all[id] = [...list, newAttendee]
     localStorage.setItem(ATTENDEE_STORAGE_KEY, JSON.stringify(all))
     return true
   } catch {
@@ -81,32 +96,41 @@ export default function RegistrationModal({ event, onClose }) {
   const [checkName, setCheckName] = useState('')
   const [view, setView] = useState('register') // 'register' | 'check' | 'success'
   const [checkResult, setCheckResult] = useState(null)
+  const [attendeeCount, setAttendeeCount] = useState(0)
+  const [submitting, setSubmitting] = useState(false)
+
+  // Load initial count
+  useState(() => {
+    getAttendees(event).then(list => setAttendeeCount(list.length))
+  })
 
   if (!event) return null
 
   const isFree = /free/i.test(event['Price'] || '')
   const maxSpots = parseInt(event['Max Spots']) || 0
-  const currentCount = getAttendees(event).length
-  const isFull = maxSpots > 0 && currentCount >= maxSpots
+  const isFull = maxSpots > 0 && attendeeCount >= maxSpots
 
-  function handleRegister() {
-    if (!name.trim() || !contact.trim()) return
-    const attendees = getAttendees(event)
+  async function handleRegister() {
+    if (!name.trim() || !contact.trim() || submitting) return
+    setSubmitting(true)
+    const attendees = await getAttendees(event)
     const already = attendees.some(a => a.name.toLowerCase() === name.trim().toLowerCase())
     if (already) {
-      setCheckResult({ found: true, name: name.trim() })
+      setCheckResult({ found: true, name: name.trim(), paid: attendees.find(a => a.name.toLowerCase() === name.trim().toLowerCase())?.paid })
       setCheckName(name.trim())
       setView('check')
+      setSubmitting(false)
       return
     }
-    if (isFull) return
-    const success = addAttendeeToStorage(event, name, contact)
+    if (maxSpots > 0 && attendees.length >= maxSpots) { setSubmitting(false); return }
+    const success = await addAttendeeToStorage(event, name, contact)
+    setSubmitting(false)
     if (success) setView('success')
   }
 
-  function handleCheck() {
+  async function handleCheck() {
     if (!checkName.trim()) return
-    const attendees = getAttendees(event)
+    const attendees = await getAttendees(event)
     const match = attendees.find(a => a.name.toLowerCase() === checkName.trim().toLowerCase())
     setCheckResult({ found: !!match, name: checkName.trim(), paid: match?.paid || false })
   }
@@ -124,8 +148,8 @@ export default function RegistrationModal({ event, onClose }) {
             <div className="w-16 h-16 bg-teal/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4ECDC4" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
             </div>
-            <h3 className="font-heading text-xl text-charcoal mb-1">You're Registered!</h3>
-            <p className="text-charcoal-light text-sm mb-1">{name.trim()}, you're all set for:</p>
+            <h3 className="font-heading text-xl text-charcoal mb-1">You&apos;re Registered!</h3>
+            <p className="text-charcoal-light text-sm mb-1">{name.trim()}, you&apos;re all set for:</p>
             <p className="font-semibold text-charcoal text-sm">{event['Event Name']}</p>
             <p className="text-charcoal-light text-xs mt-1">{event['Date']} &bull; {event['Time']} &bull; {event['Venue']}</p>
 
@@ -203,17 +227,17 @@ export default function RegistrationModal({ event, onClose }) {
                     </div>
                     {maxSpots > 0 && (
                       <p className="text-xs text-charcoal-light mb-3">
-                        {maxSpots - currentCount} of {maxSpots} spots remaining
+                        {maxSpots - attendeeCount} of {maxSpots} spots remaining
                       </p>
                     )}
                     {!isFree && (
                       <p className="text-xs text-charcoal-light/70 mb-3">
-                        After registering, you'll see payment options to complete your spot.
+                        After registering, you&apos;ll see payment options to complete your spot.
                       </p>
                     )}
-                    <button onClick={handleRegister} disabled={!name.trim() || !contact.trim()}
+                    <button onClick={handleRegister} disabled={!name.trim() || !contact.trim() || submitting}
                       className="w-full py-2.5 bg-teal text-white font-semibold rounded-lg hover:bg-teal-dark transition-colors cursor-pointer border-none text-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                      Register Now
+                      {submitting ? 'Registering...' : 'Register Now'}
                     </button>
                   </>
                 )}
