@@ -422,6 +422,18 @@ export default function Admin() {
     showToast(delta > 0 ? `Punch added (${newPunches}/6)` : `Punch removed (${newPunches}/6)`)
   }
 
+  async function approvePunchCardRequest(uid) {
+    await saveUserProfile(uid, { hasPunchCard: true, punchCardPunches: 0, punchCardRequested: false })
+    setPunchUsers(prev => prev.map(u => u._id === uid ? { ...u, hasPunchCard: true, punchCardPunches: 0, punchCardRequested: false } : u))
+    showToast('Punch card activated!')
+  }
+
+  async function denyPunchCardRequest(uid) {
+    await saveUserProfile(uid, { punchCardRequested: false })
+    setPunchUsers(prev => prev.map(u => u._id === uid ? { ...u, punchCardRequested: false } : u))
+    showToast('Request dismissed')
+  }
+
   // Auto-load punch card users when tab is selected
   useEffect(() => {
     if (tab === 'punchcards' && punchUsers.length === 0) loadPunchCardUsers()
@@ -432,7 +444,7 @@ export default function Admin() {
     { key: 'shop', label: 'Shop', count: products.length },
     { key: 'testimonials', label: 'Testimonials', count: testimonials.length },
     { key: 'gallery', label: 'Gallery', count: galleryPhotos.length },
-    { key: 'punchcards', label: 'Punch Cards', count: punchUsers.filter(u => u.hasPunchCard).length },
+    { key: 'punchcards', label: 'Punch Cards', count: punchUsers.filter(u => u.hasPunchCard).length, alert: punchUsers.filter(u => u.punchCardRequested).length },
   ]
 
   function handleAddButton() {
@@ -476,10 +488,15 @@ export default function Admin() {
           <div className="flex gap-1 mt-6">
             {TABS.map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={`px-4 py-2 rounded-t-lg text-sm font-semibold transition-colors cursor-pointer border-none ${
+                className={`px-4 py-2 rounded-t-lg text-sm font-semibold transition-colors cursor-pointer border-none relative ${
                   tab === t.key ? 'bg-gray-50 text-charcoal' : 'bg-charcoal-light/30 text-gray-300 hover:text-white'
                 }`}>
                 {t.label} <span className="ml-1 text-xs opacity-70">({t.count})</span>
+                {t.alert > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-coral text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                    {t.alert}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -762,6 +779,46 @@ export default function Admin() {
                   {punchLoading ? 'Loading...' : 'Refresh Users'}
                 </button>
               </div>
+
+              {/* Pending punch card requests */}
+              {punchUsers.filter(u => u.punchCardRequested).length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-coral rounded-full animate-pulse" />
+                    <p className="text-sm font-bold text-charcoal">Pending Requests ({punchUsers.filter(u => u.punchCardRequested).length})</p>
+                  </div>
+                  <div className="space-y-2">
+                    {punchUsers.filter(u => u.punchCardRequested).map(u => (
+                      <div key={u._id} className="bg-yellow/5 rounded-xl shadow-sm border-2 border-yellow/40 p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold bg-yellow/20 text-league-gold shrink-0">
+                            {(u.name || '?')[0].toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-charcoal">{u.name || 'No name'}</p>
+                            <p className="text-xs text-charcoal-light truncate">{u.email}{u.phone ? ` \u00b7 ${u.phone}` : ''}</p>
+                            {u.punchCardRequestedAt && (
+                              <p className="text-[10px] text-charcoal-light/60 mt-0.5">
+                                Requested {new Date(u.punchCardRequestedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => approvePunchCardRequest(u._id)}
+                              className="px-3 py-1.5 text-xs font-bold bg-teal text-white rounded-lg hover:bg-teal-dark transition-colors cursor-pointer border-none">
+                              Approve &amp; Activate
+                            </button>
+                            <button onClick={() => denyPunchCardRequest(u._id)}
+                              className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-charcoal-light rounded-lg hover:bg-gray-200 transition-colors cursor-pointer border-none">
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {punchUsers.length === 0 ? (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">

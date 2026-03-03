@@ -560,11 +560,25 @@ function PaymentLink({ label, value, color, icon, hint }) {
   )
 }
 
-function BuyPunchCardSection({ profile }) {
+function BuyPunchCardSection({ profile, onUpdate }) {
   // Show if user has no punch card, or card is fully used up (all 6 rounds)
   const punches = profile?.punchCardPunches || 0
   const hasActiveCard = profile?.hasPunchCard && punches <= 5
   if (hasActiveCard) return null
+
+  const alreadyRequested = profile?.punchCardRequested
+  const [requesting, setRequesting] = useState(false)
+  const [showPayment, setShowPayment] = useState(false)
+
+  async function handleRequest() {
+    setRequesting(true)
+    await onUpdate({
+      punchCardRequested: true,
+      punchCardRequestedAt: Date.now(),
+    })
+    setRequesting(false)
+    setShowPayment(true)
+  }
 
   return (
     <div className="bg-gradient-to-br from-yellow/10 to-league-gold/5 rounded-2xl shadow-sm border border-yellow/30 p-6">
@@ -573,7 +587,7 @@ function BuyPunchCardSection({ profile }) {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /></svg>
         </div>
         <div>
-          <h3 className="font-heading text-lg text-charcoal">Get a Punch Card</h3>
+          <h3 className="font-heading text-lg text-charcoal">{punches > 5 ? 'Get Another Punch Card' : 'Get a Punch Card'}</h3>
           <p className="text-sm text-charcoal-light">5 rounds for $75 &bull; 6th round FREE</p>
         </div>
       </div>
@@ -581,18 +595,43 @@ function BuyPunchCardSection({ profile }) {
         Save money with a punch card! Pay $75 upfront for 5 rounds of play, and your 6th round is on us.
         That&apos;s just $12.50 per round.
       </p>
-      <div className="space-y-2 mb-3">
-        <p className="text-xs font-semibold text-charcoal uppercase tracking-wide">Send $75 to:</p>
-        <PaymentLink label="Venmo" value={CONTACT.venmo} color="bg-[#3D95CE]" icon="V" />
-        <PaymentLink label="PayPal" value={CONTACT.paypal} color="bg-[#0070BA]" icon="P" />
-        <PaymentLink label="Zelle" value={CONTACT.zelle} color="bg-[#6D1ED4]" icon="Z" hint="Open your bank app or Zelle &rarr; Send &rarr; enter email above" />
-      </div>
-      <div className="p-3 bg-yellow/20 border-2 border-yellow rounded-lg">
-        <p className="text-xs font-bold text-charcoal uppercase tracking-wide mb-0.5">Include in your memo:</p>
-        <p className="text-sm font-semibold text-charcoal">Punch Card &mdash; {profile?.name || 'Your Name'}</p>
-      </div>
-      <p className="text-[10px] text-charcoal-light/60 mt-2 text-center">
-        Once we receive your payment, we&apos;ll activate your punch card. You&apos;ll see it appear on this page!
+
+      {alreadyRequested && !showPayment ? (
+        <div className="p-4 bg-yellow/20 border-2 border-yellow rounded-xl text-center">
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+            <p className="text-sm font-bold text-league-gold">Request Sent!</p>
+          </div>
+          <p className="text-xs text-charcoal-light">We&apos;ve been notified. Send payment below and your card will be activated shortly.</p>
+          <button onClick={() => setShowPayment(true)}
+            className="mt-2 px-4 py-2 bg-league-gold text-white font-semibold rounded-lg text-sm hover:bg-yellow-600 transition-colors cursor-pointer border-none">
+            Show Payment Details
+          </button>
+        </div>
+      ) : !alreadyRequested && !showPayment ? (
+        <button onClick={handleRequest} disabled={requesting}
+          className="w-full py-3 px-4 bg-league-gold text-white font-bold rounded-xl hover:bg-yellow-600 transition-colors cursor-pointer border-none text-sm disabled:opacity-50 shadow-md">
+          {requesting ? 'Sending Request...' : 'I Want a Punch Card! — $75'}
+        </button>
+      ) : null}
+
+      {showPayment && (
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-charcoal uppercase tracking-wide">Send $75 to:</p>
+            <PaymentLink label="Venmo" value={CONTACT.venmo} color="bg-[#3D95CE]" icon="V" />
+            <PaymentLink label="PayPal" value={CONTACT.paypal} color="bg-[#0070BA]" icon="P" />
+            <PaymentLink label="Zelle" value={CONTACT.zelle} color="bg-[#6D1ED4]" icon="Z" hint="Open your bank app or Zelle &rarr; Send &rarr; enter email above" />
+          </div>
+          <div className="p-3 bg-yellow/20 border-2 border-yellow rounded-lg">
+            <p className="text-xs font-bold text-charcoal uppercase tracking-wide mb-0.5">Include in your memo:</p>
+            <p className="text-sm font-semibold text-charcoal">Punch Card &mdash; {profile?.name || 'Your Name'}</p>
+          </div>
+        </div>
+      )}
+
+      <p className="text-[10px] text-charcoal-light/60 mt-3 text-center">
+        Once we confirm your payment, we&apos;ll activate your punch card. You&apos;ll see it appear on this page!
       </p>
     </div>
   )
@@ -620,7 +659,7 @@ function Dashboard() {
       <div className="space-y-6">
         <ProfileSection profile={profile} onUpdate={updateUserProfile} />
         <PunchCardDisplay profile={profile} onUpdate={updateUserProfile} />
-        <BuyPunchCardSection profile={profile} />
+        <BuyPunchCardSection profile={profile} onUpdate={updateUserProfile} />
         <MyEventsSection user={user} profile={profile} />
       </div>
     </div>
