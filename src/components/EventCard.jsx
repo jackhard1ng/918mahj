@@ -1,15 +1,23 @@
 import { useState, useEffect } from 'react'
 import { EVENT_COLORS } from '../config'
 import RegistrationModal from './RegistrationModal'
-import { isFirebaseReady, fetchAttendees, subscribeToAttendees, getEventId } from '../services/db'
+import { isFirebaseReady, fetchAttendees, subscribeToAttendees, getEventId, saveEventAttendees } from '../services/db'
 import { useAuth } from '../contexts/AuthContext'
 
 const ATTENDEE_STORAGE_KEY = 'mahj918_admin_attendees'
 
-function getRegisteredCountLocal(event) {
+function getLocalAttendees() {
   try {
     const stored = localStorage.getItem(ATTENDEE_STORAGE_KEY)
-    const all = stored ? JSON.parse(stored) : {}
+    return stored ? JSON.parse(stored) : {}
+  } catch {
+    return {}
+  }
+}
+
+function getRegisteredCountLocal(event) {
+  try {
+    const all = getLocalAttendees()
     const id = getEventId(event)
     return (all[id] || []).length
   } catch {
@@ -85,12 +93,17 @@ export default function EventCard({ event, compact = false }) {
   const [showRegistration, setShowRegistration] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [registered, setRegistered] = useState(0)
+  const [attendeeList, setAttendeeList] = useState([])
+  const [unregistering, setUnregistering] = useState(false)
   const { user, profile } = useAuth() || {}
   const colors = EVENT_COLORS[event['Event Type']] || EVENT_COLORS['Open Play']
   const hasImage = event['Image URL'] && event['Image URL'].trim()
   const isFree = /free/i.test(event['Price'] || '')
   const maxSpots = parseInt(event['Max Spots']) || 0
   const spotsLeft = maxSpots > 0 ? maxSpots - registered : 0
+
+  // Check if logged-in user is already registered
+  const isUserRegistered = user?.uid && attendeeList.some(a => a.userId === user.uid)
 
   // Real-time attendee count (updates when anyone registers from any device)
   useEffect(() => {
@@ -103,7 +116,9 @@ export default function EventCard({ event, compact = false }) {
     // Subscribe to real-time updates from Firestore
     const unsub = subscribeToAttendees((docs) => {
       const match = docs.find(d => d._id === id)
-      setRegistered(match?.list?.length || 0)
+      const list = match?.list || []
+      setAttendeeList(list)
+      setRegistered(list.length)
     })
     return unsub
   }, [event['Event Name'], event['Date'], event['Time']])
@@ -115,6 +130,28 @@ export default function EventCard({ event, compact = false }) {
   const handleCloseRegistration = () => {
     setShowRegistration(false)
     // Real-time listener handles the count update automatically
+  }
+
+  const handleUnregister = async () => {
+    if (!user?.uid || unregistering) return
+    setUnregistering(true)
+    try {
+      const id = getEventId(event)
+      const newList = attendeeList.filter(a => a.userId !== user.uid)
+
+      // Update localStorage
+      const localAll = getLocalAttendees()
+      localAll[id] = newList
+      localStorage.setItem(ATTENDEE_STORAGE_KEY, JSON.stringify(localAll))
+
+      // Update Firestore
+      if (isFirebaseReady()) {
+        await saveEventAttendees(id, newList)
+      }
+    } catch (e) {
+      console.error('Error unregistering:', e)
+    }
+    setUnregistering(false)
   }
 
   if (compact) {
@@ -197,12 +234,28 @@ export default function EventCard({ event, compact = false }) {
           ) : null}
 
           <div className="mt-auto">
-            <button
-              onClick={handleRegister}
-              className="w-full py-2.5 px-4 bg-teal text-white font-semibold rounded-lg hover:bg-teal-dark transition-colors cursor-pointer border-none text-sm"
-            >
-              {isFree ? 'Sign Up \u2014 Free' : 'Register'}
-            </button>
+            {isUserRegistered ? (
+              <div className="space-y-2">
+                <div className="w-full py-2.5 px-4 bg-teal/10 text-teal font-semibold rounded-lg text-sm text-center flex items-center justify-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
+                  Registered
+                </div>
+                <button
+                  onClick={handleUnregister}
+                  disabled={unregistering}
+                  className="w-full py-2 px-4 bg-transparent text-charcoal-light font-semibold rounded-lg hover:bg-coral/10 hover:text-coral transition-colors cursor-pointer border border-gray-200 text-xs disabled:opacity-50"
+                >
+                  {unregistering ? 'Cancelling...' : 'Cancel Registration'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleRegister}
+                className="w-full py-2.5 px-4 bg-teal text-white font-semibold rounded-lg hover:bg-teal-dark transition-colors cursor-pointer border-none text-sm"
+              >
+                {isFree ? 'Sign Up \u2014 Free' : 'Register'}
+              </button>
+            )}
           </div>
         </div>
       </div>
