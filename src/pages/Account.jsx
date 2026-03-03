@@ -147,7 +147,8 @@ function SignupForm({ onSwitch }) {
 }
 
 function PunchCardDisplay({ profile }) {
-  if (!profile?.hasPunchCard) return null
+  // Show if they have an active punch card OR have any punch history
+  if (!profile?.hasPunchCard && !(profile?.punchCardPunches > 0)) return null
 
   const punches = profile.punchCardPunches || 0
   const total = 5  // 5 rounds for $75
@@ -560,8 +561,9 @@ function PaymentLink({ label, value, color, icon, hint }) {
 }
 
 function BuyPunchCardSection({ profile }) {
-  // Show if user has no punch card or card is expired (all 6 used)
-  const hasActiveCard = profile?.hasPunchCard && (profile?.punchCardPunches || 0) <= 5
+  // Show if user has no punch card, or card is fully used up (all 6 rounds)
+  const punches = profile?.punchCardPunches || 0
+  const hasActiveCard = profile?.hasPunchCard && punches <= 5
   if (hasActiveCard) return null
 
   return (

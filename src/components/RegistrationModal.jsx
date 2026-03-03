@@ -175,11 +175,8 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
     // Deduct a punch from the user's card
     if (success && usingPunchCard && currentUser?.uid) {
       const newPunches = punchesUsed + 1
-      const cardUsedUp = newPunches > 5 // used all 5 + bonus
       await saveUserProfile(currentUser.uid, {
         punchCardPunches: newPunches,
-        // If all 6 rounds used, mark card as expired
-        ...(cardUsedUp ? { hasPunchCard: false } : {}),
       })
     }
 

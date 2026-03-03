@@ -412,7 +412,14 @@ export default function Admin() {
   async function resetUserPunchCard(uid) {
     await saveUserProfile(uid, { punchCardPunches: 0, hasPunchCard: true })
     setPunchUsers(prev => prev.map(u => u._id === uid ? { ...u, punchCardPunches: 0, hasPunchCard: true } : u))
-    showToast('Punch card reset')
+    showToast('Punch card reset to 0')
+  }
+
+  async function adjustPunch(uid, currentPunches, delta) {
+    const newPunches = Math.max(0, Math.min(6, (currentPunches || 0) + delta))
+    await saveUserProfile(uid, { punchCardPunches: newPunches })
+    setPunchUsers(prev => prev.map(u => u._id === uid ? { ...u, punchCardPunches: newPunches } : u))
+    showToast(delta > 0 ? `Punch added (${newPunches}/6)` : `Punch removed (${newPunches}/6)`)
   }
 
   // Auto-load punch card users when tab is selected
@@ -748,9 +755,10 @@ export default function Admin() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-sm text-charcoal-light">5 rounds for $75 &bull; 6th round is FREE</p>
+                  <p className="text-xs text-charcoal-light/60 mt-0.5">Punch cards persist permanently. Use +/- to adjust punches if needed.</p>
                 </div>
                 <button onClick={loadPunchCardUsers}
-                  className="px-4 py-2 bg-teal text-white font-semibold rounded-lg text-sm hover:bg-teal-dark transition-colors cursor-pointer border-none">
+                  className="px-4 py-2 bg-teal text-white font-semibold rounded-lg text-sm hover:bg-teal-dark transition-colors cursor-pointer border-none shrink-0">
                   {punchLoading ? 'Loading...' : 'Refresh Users'}
                 </button>
               </div>
@@ -763,54 +771,81 @@ export default function Admin() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {punchUsers.map(u => (
-                    <div key={u._id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                          u.hasPunchCard ? 'bg-yellow/20 text-league-gold' : 'bg-gray-100 text-charcoal-light'
-                        }`}>
-                          {(u.name || '?')[0].toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-charcoal">{u.name || 'No name'}</p>
-                          <p className="text-xs text-charcoal-light">{u.email}</p>
-                          {u.phone && <p className="text-xs text-charcoal-light">{u.phone}</p>}
-                        </div>
-                        {u.hasPunchCard ? (
-                          <div className="text-right">
-                            <div className="flex gap-1 mb-1">
-                              {Array.from({ length: 5 }).map((_, i) => (
-                                <div key={i} className={`w-4 h-4 rounded-sm ${i < (u.punchCardPunches || 0) ? 'bg-teal/30' : 'bg-gray-100'}`} />
-                              ))}
-                              <div className={`w-4 h-4 rounded-sm ${(u.punchCardPunches || 0) >= 5 ? 'bg-yellow/40' : 'bg-gray-100'}`}>
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={(u.punchCardPunches || 0) >= 5 ? '#F0A500' : '#D1D5DB'} strokeWidth="2" className="m-0.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                  {/* Show users with active cards first, then everyone else */}
+                  {[...punchUsers].sort((a, b) => (b.hasPunchCard ? 1 : 0) - (a.hasPunchCard ? 1 : 0)).map(u => {
+                    const punches = u.punchCardPunches || 0
+                    const cardComplete = punches > 5
+                    const statusLabel = !u.hasPunchCard ? 'No card' : cardComplete ? 'Complete (6/6)' : punches >= 5 ? 'Bonus earned' : `${punches}/5 used`
+                    const statusColor = !u.hasPunchCard ? 'text-charcoal-light/60' : cardComplete ? 'text-teal' : punches >= 5 ? 'text-league-gold' : 'text-charcoal-light'
+
+                    return (
+                      <div key={u._id} className={`bg-white rounded-xl shadow-sm border p-4 ${u.hasPunchCard ? 'border-yellow/30' : 'border-gray-100'}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                            u.hasPunchCard ? 'bg-yellow/20 text-league-gold' : 'bg-gray-100 text-charcoal-light'
+                          }`}>
+                            {(u.name || '?')[0].toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-charcoal">{u.name || 'No name'}</p>
+                            <p className="text-xs text-charcoal-light truncate">{u.email}{u.phone ? ` \u00b7 ${u.phone}` : ''}</p>
+                          </div>
+
+                          {/* Punch card visual + controls — always shown for card holders */}
+                          {u.hasPunchCard ? (
+                            <div className="flex items-center gap-2">
+                              {/* Punch dots */}
+                              <div className="hidden sm:block">
+                                <div className="flex gap-0.5 mb-0.5">
+                                  {Array.from({ length: 5 }).map((_, i) => (
+                                    <div key={i} className={`w-3.5 h-3.5 rounded-sm ${i < punches ? 'bg-teal/40' : 'bg-gray-100'}`} />
+                                  ))}
+                                  <div className={`w-3.5 h-3.5 rounded-sm flex items-center justify-center ${punches > 5 ? 'bg-yellow/40' : punches >= 5 ? 'bg-yellow/20' : 'bg-gray-100'}`}>
+                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={punches >= 5 ? '#F0A500' : '#D1D5DB'} strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                                  </div>
+                                </div>
+                                <p className={`text-[10px] font-semibold ${statusColor}`}>{statusLabel}</p>
+                              </div>
+
+                              {/* +/- controls */}
+                              <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1">
+                                <button onClick={() => adjustPunch(u._id, punches, -1)} disabled={punches <= 0}
+                                  className="w-6 h-6 flex items-center justify-center rounded text-sm font-bold bg-white border border-gray-200 cursor-pointer hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-charcoal"
+                                  title="Remove a punch">
+                                  &minus;
+                                </button>
+                                <span className="text-xs font-bold text-charcoal w-5 text-center">{punches}</span>
+                                <button onClick={() => adjustPunch(u._id, punches, 1)} disabled={punches >= 6}
+                                  className="w-6 h-6 flex items-center justify-center rounded text-sm font-bold bg-white border border-gray-200 cursor-pointer hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-charcoal"
+                                  title="Add a punch">
+                                  +
+                                </button>
+                              </div>
+
+                              {/* Reset / Remove */}
+                              <div className="flex flex-col gap-1">
+                                <button onClick={() => resetUserPunchCard(u._id)}
+                                  className="px-2 py-0.5 text-[10px] font-semibold bg-yellow/20 text-league-gold rounded hover:bg-yellow/30 transition-colors cursor-pointer border-none"
+                                  title="Reset to 0 punches (new card)">
+                                  New Card
+                                </button>
+                                <button onClick={() => toggleUserPunchCard(u._id, true)}
+                                  className="px-2 py-0.5 text-[10px] font-semibold bg-coral/10 text-coral rounded hover:bg-coral/20 transition-colors cursor-pointer border-none"
+                                  title="Remove punch card entirely">
+                                  Remove
+                                </button>
                               </div>
                             </div>
-                            <p className="text-[10px] text-charcoal-light">{u.punchCardPunches || 0}/5 used{(u.punchCardPunches || 0) >= 5 ? ' + bonus' : ''}</p>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-charcoal-light/60">No card</span>
-                        )}
-                        <div className="flex gap-1 ml-2">
-                          {u.hasPunchCard && (
-                            <button onClick={() => resetUserPunchCard(u._id)}
-                              className="px-2 py-1 text-[11px] font-semibold bg-yellow/20 text-league-gold rounded hover:bg-yellow/30 transition-colors cursor-pointer border-none"
-                              title="Reset punches to 0">
-                              Reset
+                          ) : (
+                            <button onClick={() => toggleUserPunchCard(u._id, false)}
+                              className="px-3 py-1.5 text-xs font-semibold bg-teal/10 text-teal rounded-lg hover:bg-teal/20 transition-colors cursor-pointer border-none shrink-0">
+                              Give Card
                             </button>
                           )}
-                          <button onClick={() => toggleUserPunchCard(u._id, u.hasPunchCard)}
-                            className={`px-2 py-1 text-[11px] font-semibold rounded transition-colors cursor-pointer border-none ${
-                              u.hasPunchCard
-                                ? 'bg-coral/10 text-coral hover:bg-coral/20'
-                                : 'bg-teal/10 text-teal hover:bg-teal/20'
-                            }`}>
-                            {u.hasPunchCard ? 'Remove' : 'Give Card'}
-                          </button>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </>
