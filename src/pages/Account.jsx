@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { getUserRegistrations } from '../services/db'
+import { getUserRegistrations, isFirebaseReady } from '../services/db'
+import { db } from '../firebase'
+import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore'
 import { useEvents } from '../hooks/useSiteData'
 import { CONTACT } from '../config'
 
@@ -637,6 +639,54 @@ function BuyPunchCardSection({ profile, onUpdate }) {
   )
 }
 
+function AnnouncementsSection({ profile }) {
+  const [announcements, setAnnouncements] = useState([])
+  const [dismissed, setDismissed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mahj918_dismissed_nl') || '[]') } catch { return [] }
+  })
+
+  useEffect(() => {
+    if (!profile?.newsletter || !isFirebaseReady() || !db) return
+    const unsub = onSnapshot(collection(db, 'newsletters'), (snapshot) => {
+      const items = []
+      snapshot.forEach(d => items.push({ _id: d.id, ...d.data() }))
+      items.sort((a, b) => (b.sentAt || 0) - (a.sentAt || 0))
+      setAnnouncements(items)
+    }, () => {})
+    return unsub
+  }, [profile?.newsletter])
+
+  const visible = announcements.filter(a => !dismissed.includes(a._id)).slice(0, 3)
+  if (!profile?.newsletter || visible.length === 0) return null
+
+  function dismiss(id) {
+    const updated = [...dismissed, id]
+    setDismissed(updated)
+    localStorage.setItem('mahj918_dismissed_nl', JSON.stringify(updated))
+  }
+
+  return (
+    <div className="space-y-3">
+      {visible.map(a => (
+        <div key={a._id} className="bg-teal/5 rounded-2xl border border-teal/20 p-5 relative">
+          <button onClick={() => dismiss(a._id)}
+            className="absolute top-3 right-3 p-1 rounded hover:bg-gray-200 transition-colors cursor-pointer border-none bg-transparent text-charcoal-light"
+            title="Dismiss">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+          </button>
+          <div className="flex items-center gap-2 mb-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ECDC4" strokeWidth="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
+            <p className="text-xs font-bold text-teal uppercase tracking-wide">Newsletter</p>
+            <span className="text-[10px] text-charcoal-light/60">{new Date(a.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+          </div>
+          <h4 className="font-heading text-base text-charcoal mb-1">{a.subject}</h4>
+          <p className="text-sm text-charcoal-light whitespace-pre-wrap">{a.body}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function Dashboard() {
   const { user, profile, logout, updateUserProfile } = useAuth()
 
@@ -657,6 +707,7 @@ function Dashboard() {
       </div>
 
       <div className="space-y-6">
+        <AnnouncementsSection profile={profile} />
         <ProfileSection profile={profile} onUpdate={updateUserProfile} />
         <PunchCardDisplay profile={profile} onUpdate={updateUserProfile} />
         <BuyPunchCardSection profile={profile} onUpdate={updateUserProfile} />

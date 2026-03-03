@@ -3,7 +3,7 @@ import { EVENT_COLORS } from '../config'
 import { useEvents, useShop, useTestimonials, useGallery } from '../hooks/useSiteData'
 import { isFirebaseReady, saveCollection, fetchAttendees, saveAttendees, saveEventAttendees, subscribeToAttendees, uploadImage, addGalleryPhoto, deleteGalleryPhoto, getEventId, saveUserProfile, COLLECTIONS } from '../services/db'
 import { db } from '../firebase'
-import { collection, getDocs, onSnapshot } from 'firebase/firestore'
+import { collection, getDocs, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore'
 
 const EVENT_TYPES = ['Open Play', 'Birdy Basics', 'League', 'Special Event', 'Private']
 const PRODUCT_CATEGORIES = ['Sets & Tiles', 'Accessories', 'Entertaining']
@@ -438,7 +438,59 @@ export default function Admin() {
     showToast('Request dismissed')
   }
 
+  // ─── Newsletter management ───
+  const [nlSubject, setNlSubject] = useState('')
+  const [nlBody, setNlBody] = useState('')
+  const [nlSending, setNlSending] = useState(false)
+  const [newsletters, setNewsletters] = useState([])
 
+  const subscribers = punchUsers.filter(u => u.newsletter && u.email)
+
+  // Real-time listener for newsletters
+  useEffect(() => {
+    if (!isFirebaseReady() || !db) return
+    const unsub = onSnapshot(collection(db, 'newsletters'), (snapshot) => {
+      const items = []
+      snapshot.forEach(d => items.push({ _id: d.id, ...d.data() }))
+      items.sort((a, b) => (b.sentAt || 0) - (a.sentAt || 0))
+      setNewsletters(items)
+    }, () => {})
+    return unsub
+  }, [])
+
+  async function sendNewsletter() {
+    if (!nlSubject.trim() || !nlBody.trim()) return
+    setNlSending(true)
+    try {
+      // Save to Firestore as an announcement
+      const id = `nl_${Date.now()}`
+      await setDoc(doc(db, 'newsletters', id), {
+        subject: nlSubject.trim(),
+        body: nlBody.trim(),
+        sentAt: Date.now(),
+        subscriberCount: subscribers.length,
+      })
+      showToast(`Newsletter saved & ready to send to ${subscribers.length} subscribers`)
+      setNlSubject('')
+      setNlBody('')
+    } catch (e) {
+      console.error('Error saving newsletter:', e)
+      showToast('Error saving newsletter')
+    }
+    setNlSending(false)
+  }
+
+  function openMailClient() {
+    const emails = subscribers.map(u => u.email)
+    const subject = encodeURIComponent(nlSubject)
+    const body = encodeURIComponent(nlBody)
+    window.open(`mailto:?bcc=${emails.join(',')}&subject=${subject}&body=${body}`, '_blank')
+  }
+
+  async function deleteNewsletter(id) {
+    await deleteDoc(doc(db, 'newsletters', id))
+    showToast('Newsletter deleted')
+  }
 
   const TABS = [
     { key: 'events', label: 'Events', count: events.length },
@@ -446,6 +498,7 @@ export default function Admin() {
     { key: 'testimonials', label: 'Testimonials', count: testimonials.length },
     { key: 'gallery', label: 'Gallery', count: galleryPhotos.length },
     { key: 'punchcards', label: 'Punch Cards', count: punchUsers.filter(u => u.hasPunchCard).length, alert: punchUsers.filter(u => u.punchCardRequested).length },
+    { key: 'newsletter', label: 'Newsletter', count: subscribers.length },
   ]
 
   function handleAddButton() {
@@ -904,6 +957,120 @@ export default function Admin() {
                 </div>
               )}
             </>
+          )}
+        </div>
+      )}
+
+      {tab === 'newsletter' && (
+        <div className="pt-4 pb-12">
+          {!firebaseOn ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+              <p className="text-charcoal-light">Newsletter management requires Firebase.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Compose */}
+              <div className="lg:col-span-2 space-y-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                  <h3 className="font-heading text-lg text-charcoal mb-1">Compose Newsletter</h3>
+                  <p className="text-xs text-charcoal-light/60 mb-4">Write your message, then send via email to all {subscribers.length} subscriber{subscribers.length !== 1 ? 's' : ''}. It also saves as an announcement on the site.</p>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-semibold text-charcoal mb-1">Subject</label>
+                      <input type="text" value={nlSubject} onChange={e => setNlSubject(e.target.value)}
+                        placeholder="e.g., This Week at 918 Mahj"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-charcoal mb-1">Message</label>
+                      <textarea value={nlBody} onChange={e => setNlBody(e.target.value)} rows={8}
+                        placeholder="Hey everyone! Here's what's coming up..."
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal resize-y" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { sendNewsletter().then(() => { if (nlSubject.trim() && nlBody.trim()) openMailClient() }) }}
+                        disabled={!nlSubject.trim() || !nlBody.trim() || nlSending || subscribers.length === 0}
+                        className="flex-1 py-2.5 px-4 bg-teal text-white font-semibold rounded-lg text-sm hover:bg-teal-dark transition-colors cursor-pointer border-none disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
+                        {nlSending ? 'Saving...' : `Send to ${subscribers.length} Subscriber${subscribers.length !== 1 ? 's' : ''}`}
+                      </button>
+                      <button onClick={sendNewsletter}
+                        disabled={!nlSubject.trim() || !nlBody.trim() || nlSending}
+                        className="py-2.5 px-4 bg-gray-100 text-charcoal font-semibold rounded-lg text-sm hover:bg-gray-200 transition-colors cursor-pointer border-none disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Save as site announcement only (no email)">
+                        Save Only
+                      </button>
+                    </div>
+                    {subscribers.length === 0 && (
+                      <p className="text-xs text-coral font-semibold">No subscribers yet. Users can subscribe from their Account page.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Past newsletters */}
+                {newsletters.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                    <h3 className="font-heading text-base text-charcoal mb-3">Past Newsletters</h3>
+                    <div className="space-y-3">
+                      {newsletters.map(nl => (
+                        <div key={nl._id} className="border border-gray-100 rounded-lg p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-charcoal">{nl.subject}</p>
+                              <p className="text-xs text-charcoal-light/60 mt-0.5">
+                                {new Date(nl.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                {nl.subscriberCount ? ` \u00b7 Sent to ${nl.subscriberCount} subscriber${nl.subscriberCount !== 1 ? 's' : ''}` : ''}
+                              </p>
+                            </div>
+                            <button onClick={() => deleteNewsletter(nl._id)}
+                              className="p-1 rounded hover:bg-coral/10 text-charcoal-light hover:text-coral transition-colors cursor-pointer border-none bg-transparent shrink-0" title="Delete">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                            </button>
+                          </div>
+                          <p className="text-sm text-charcoal-light mt-2 whitespace-pre-wrap line-clamp-3">{nl.body}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Subscriber list sidebar */}
+              <div className="space-y-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-heading text-base text-charcoal">Subscribers</h3>
+                    <span className="text-xs font-bold text-teal bg-teal/10 px-2 py-0.5 rounded-full">{subscribers.length}</span>
+                  </div>
+                  {subscribers.length === 0 ? (
+                    <p className="text-sm text-charcoal-light/60 text-center py-4">No subscribers yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {subscribers.map(u => (
+                        <div key={u._id} className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-teal/10 text-teal flex items-center justify-center text-xs font-bold shrink-0">
+                            {(u.name || '?')[0].toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-charcoal truncate">{u.name || 'No name'}</p>
+                            <p className="text-xs text-charcoal-light truncate">{u.email}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {subscribers.length > 0 && (
+                  <button onClick={() => { navigator.clipboard.writeText(subscribers.map(u => u.email).join(', ')); showToast('Emails copied to clipboard') }}
+                    className="w-full py-2.5 px-4 bg-gray-100 text-charcoal font-semibold rounded-lg text-sm hover:bg-gray-200 transition-colors cursor-pointer border-none flex items-center justify-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+                    Copy All Emails
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}
