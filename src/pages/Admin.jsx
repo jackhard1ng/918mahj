@@ -928,6 +928,20 @@ export default function Admin() {
                                 {attendee.contact}
                               </p>
                             )}
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {attendee.level && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-charcoal-light capitalize">{attendee.level}</span>
+                              )}
+                              {attendee.hasPunchCard && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-yellow/20 text-league-gold">Punch Card</span>
+                              )}
+                            </div>
+                            {attendee.tableRequests && (
+                              <p className="text-xs text-charcoal-light/80 mt-1 flex items-start gap-1">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 mt-0.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
+                                Table: {attendee.tableRequests}
+                              </p>
+                            )}
                           </div>
                           <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${attendee.paid ? 'bg-teal/10 text-teal' : 'bg-coral/10 text-coral'}`}>{attendee.paid ? 'Paid' : 'Unpaid'}</span>
                           <button onClick={() => removeAttendee(event, idx)} className="p-1 rounded hover:bg-coral/10 text-charcoal-light hover:text-coral transition-colors cursor-pointer border-none bg-transparent shrink-0" title="Remove">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { EVENT_COLORS } from '../config'
 import RegistrationModal from './RegistrationModal'
 import { isFirebaseReady, fetchAttendees, subscribeToAttendees, getEventId } from '../services/db'
+import { useAuth } from '../contexts/AuthContext'
 
 const ATTENDEE_STORAGE_KEY = 'mahj918_admin_attendees'
 
@@ -84,6 +85,7 @@ export default function EventCard({ event, compact = false }) {
   const [showRegistration, setShowRegistration] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [registered, setRegistered] = useState(0)
+  const { user, profile } = useAuth() || {}
   const colors = EVENT_COLORS[event['Event Type']] || EVENT_COLORS['Open Play']
   const hasImage = event['Image URL'] && event['Image URL'].trim()
   const isFree = /free/i.test(event['Price'] || '')
@@ -205,7 +207,7 @@ export default function EventCard({ event, compact = false }) {
         </div>
       </div>
 
-      {showRegistration && <RegistrationModal event={event} onClose={handleCloseRegistration} />}
+      {showRegistration && <RegistrationModal event={event} onClose={handleCloseRegistration} currentUser={user ? { uid: user.uid, ...profile } : null} />}
     </>
   )
 }

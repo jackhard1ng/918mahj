@@ -1,6 +1,6 @@
 import { db, storage, hasConfig } from '../firebase'
 import {
-  collection, doc, getDocs, setDoc, deleteDoc, onSnapshot, writeBatch,
+  collection, doc, getDocs, getDoc, setDoc, deleteDoc, onSnapshot, writeBatch,
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 
@@ -11,6 +11,7 @@ const COLLECTIONS = {
   testimonials: 'testimonials',
   attendees: 'attendees',
   gallery: 'gallery',
+  users: 'users',
 }
 
 // ─── Check if Firebase is configured ───
@@ -111,7 +112,7 @@ export async function deleteImage(url) {
       const storageRef = ref(storage, url)
       await deleteObject(storageRef)
     }
-  } catch (error) {
+  } catch {
     // Ignore — image may already be deleted
   }
 }
@@ -196,6 +197,62 @@ export async function deleteGalleryPhoto(photo) {
   } catch (error) {
     console.error('Error deleting gallery photo:', error)
     return false
+  }
+}
+
+// ─── User profiles ───
+export async function getUserProfile(uid) {
+  if (!isFirebaseReady()) return null
+  try {
+    const snap = await getDoc(doc(db, COLLECTIONS.users, uid))
+    return snap.exists() ? { _id: snap.id, ...snap.data() } : null
+  } catch (error) {
+    console.error('Error fetching user profile:', error)
+    return null
+  }
+}
+
+export async function saveUserProfile(uid, data) {
+  if (!isFirebaseReady()) return false
+  try {
+    const { _id, ...cleanData } = data
+    await setDoc(doc(db, COLLECTIONS.users, uid), cleanData, { merge: true })
+    return true
+  } catch (error) {
+    console.error('Error saving user profile:', error)
+    return false
+  }
+}
+
+export function subscribeToUserProfile(uid, callback) {
+  if (!isFirebaseReady()) return () => {}
+  return onSnapshot(doc(db, COLLECTIONS.users, uid), (snap) => {
+    callback(snap.exists() ? { _id: snap.id, ...snap.data() } : null)
+  }, (error) => {
+    console.error('Error listening to user profile:', error)
+    callback(null)
+  })
+}
+
+// ─── Get all events a user is registered for ───
+export async function getUserRegistrations(uid, userName) {
+  if (!isFirebaseReady()) return []
+  try {
+    const snapshot = await getDocs(collection(db, COLLECTIONS.attendees))
+    const registrations = []
+    snapshot.forEach((d) => {
+      const list = d.data().list || []
+      const match = list.find(a =>
+        a.userId === uid || (userName && a.name.toLowerCase() === userName.toLowerCase())
+      )
+      if (match) {
+        registrations.push({ eventId: d.id, ...match })
+      }
+    })
+    return registrations
+  } catch (error) {
+    console.error('Error fetching user registrations:', error)
+    return []
   }
 }
 
