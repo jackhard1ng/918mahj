@@ -148,21 +148,26 @@ function PunchCardDisplay({ profile }) {
   if (!profile?.hasPunchCard) return null
 
   const punches = profile.punchCardPunches || 0
-  const total = 10
+  const total = 5  // 5 rounds for $75
   const filled = Math.min(punches, total)
+  const bonusEarned = punches >= total
+  const bonusUsed = punches > total // 6th punch = bonus was used
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-1">
         <div className="w-10 h-10 bg-yellow/30 rounded-full flex items-center justify-center">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /></svg>
         </div>
         <div>
           <h3 className="font-heading text-lg text-charcoal">Punch Card</h3>
-          <p className="text-sm text-charcoal-light">{filled} of {total} punches used</p>
+          <p className="text-sm text-charcoal-light">5 rounds for $75 &bull; 6th round FREE</p>
         </div>
       </div>
-      <div className="grid grid-cols-5 gap-2">
+      <p className="text-xs text-charcoal-light mb-3 ml-13">{filled} of {total} rounds used</p>
+
+      {/* 5 regular punches */}
+      <div className="grid grid-cols-6 gap-2">
         {Array.from({ length: total }).map((_, i) => (
           <div key={i} className={`aspect-square rounded-lg border-2 flex items-center justify-center transition-all ${
             i < filled
@@ -176,10 +181,38 @@ function PunchCardDisplay({ profile }) {
             )}
           </div>
         ))}
+        {/* Bonus (6th) punch */}
+        <div className={`aspect-square rounded-lg border-2 border-dashed flex items-center justify-center transition-all ${
+          bonusUsed
+            ? 'bg-yellow/20 border-league-gold'
+            : bonusEarned
+              ? 'bg-yellow/10 border-league-gold animate-pulse'
+              : 'bg-gray-50 border-gray-200'
+        }`}>
+          {bonusUsed ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={bonusEarned ? '#F0A500' : '#D1D5DB'} strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+          )}
+        </div>
       </div>
-      {filled >= total && (
+
+      {/* Labels */}
+      <div className="flex items-center justify-between mt-2">
+        <p className="text-[10px] text-charcoal-light">Rounds 1-5</p>
+        <p className={`text-[10px] font-semibold ${bonusEarned ? 'text-league-gold' : 'text-charcoal-light'}`}>FREE!</p>
+      </div>
+
+      {bonusEarned && !bonusUsed && (
+        <div className="mt-3 p-3 bg-yellow/20 border-2 border-yellow rounded-lg text-center">
+          <p className="text-sm font-semibold text-league-gold">You earned a FREE round!</p>
+          <p className="text-xs text-charcoal-light mt-0.5">Register for your next event — it&apos;s on us.</p>
+        </div>
+      )}
+      {bonusUsed && (
         <div className="mt-3 p-3 bg-teal/10 rounded-lg text-center">
-          <p className="text-sm font-semibold text-teal">Your punch card is full! Your next event is free!</p>
+          <p className="text-sm font-semibold text-teal">Punch card complete!</p>
+          <p className="text-xs text-charcoal-light mt-0.5">All 6 rounds used. Ask about getting a new card!</p>
         </div>
       )}
     </div>

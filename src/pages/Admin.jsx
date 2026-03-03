@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { EVENT_COLORS } from '../config'
 import { useEvents, useShop, useTestimonials, useGallery } from '../hooks/useSiteData'
-import { isFirebaseReady, saveCollection, fetchAttendees, saveAttendees, saveEventAttendees, subscribeToAttendees, uploadImage, addGalleryPhoto, deleteGalleryPhoto, getEventId, COLLECTIONS } from '../services/db'
+import { isFirebaseReady, saveCollection, fetchAttendees, saveAttendees, saveEventAttendees, subscribeToAttendees, uploadImage, addGalleryPhoto, deleteGalleryPhoto, getEventId, saveUserProfile, COLLECTIONS } from '../services/db'
+import { db } from '../firebase'
+import { collection, getDocs } from 'firebase/firestore'
 
 const EVENT_TYPES = ['Open Play', 'Birdy Basics', 'League', 'Special Event', 'Private']
 const PRODUCT_CATEGORIES = ['Sets & Tiles', 'Accessories', 'Entertaining']
@@ -380,11 +382,49 @@ export default function Admin() {
   // ─── Unique event names for gallery tagging ───
   const eventNames = useMemo(() => [...new Set(events.map(e => e['Event Name']).filter(Boolean))], [events])
 
+  // ─── Punch card management ───
+  const [punchUsers, setPunchUsers] = useState([])
+  const [punchLoading, setPunchLoading] = useState(false)
+
+  async function loadPunchCardUsers() {
+    if (!isFirebaseReady() || !db) return
+    setPunchLoading(true)
+    try {
+      const snapshot = await getDocs(collection(db, 'users'))
+      const users = []
+      snapshot.forEach(d => users.push({ _id: d.id, ...d.data() }))
+      setPunchUsers(users)
+    } catch (e) { console.error('Error loading users:', e) }
+    setPunchLoading(false)
+  }
+
+  async function toggleUserPunchCard(uid, currentValue) {
+    const newVal = !currentValue
+    await saveUserProfile(uid, {
+      hasPunchCard: newVal,
+      ...(newVal ? { punchCardPunches: 0 } : {}),
+    })
+    setPunchUsers(prev => prev.map(u => u._id === uid ? { ...u, hasPunchCard: newVal, ...(newVal ? { punchCardPunches: 0 } : {}) } : u))
+    showToast(newVal ? 'Punch card activated' : 'Punch card removed')
+  }
+
+  async function resetUserPunchCard(uid) {
+    await saveUserProfile(uid, { punchCardPunches: 0, hasPunchCard: true })
+    setPunchUsers(prev => prev.map(u => u._id === uid ? { ...u, punchCardPunches: 0, hasPunchCard: true } : u))
+    showToast('Punch card reset')
+  }
+
+  // Auto-load punch card users when tab is selected
+  useEffect(() => {
+    if (tab === 'punchcards' && punchUsers.length === 0) loadPunchCardUsers()
+  }, [tab])
+
   const TABS = [
     { key: 'events', label: 'Events', count: events.length },
     { key: 'shop', label: 'Shop', count: products.length },
     { key: 'testimonials', label: 'Testimonials', count: testimonials.length },
     { key: 'gallery', label: 'Gallery', count: galleryPhotos.length },
+    { key: 'punchcards', label: 'Punch Cards', count: punchUsers.filter(u => u.hasPunchCard).length },
   ]
 
   function handleAddButton() {
@@ -416,7 +456,7 @@ export default function Admin() {
                 )}
               </p>
             </div>
-            {tab !== 'gallery' && (
+            {tab !== 'gallery' && tab !== 'punchcards' && (
               <button onClick={handleAddButton}
                 className="bg-teal hover:bg-teal-dark text-white font-semibold px-5 py-2.5 rounded-lg transition-colors cursor-pointer border-none text-sm flex items-center gap-2">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
@@ -691,6 +731,88 @@ export default function Admin() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'punchcards' && (
+        <div className="pt-4 pb-12">
+          {!firebaseOn ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+              <p className="text-charcoal-light">Punch card management requires Firebase.</p>
+              <p className="text-xs text-charcoal-light/60 mt-1">Add your Firebase config to .env to manage user punch cards.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm text-charcoal-light">5 rounds for $75 &bull; 6th round is FREE</p>
+                </div>
+                <button onClick={loadPunchCardUsers}
+                  className="px-4 py-2 bg-teal text-white font-semibold rounded-lg text-sm hover:bg-teal-dark transition-colors cursor-pointer border-none">
+                  {punchLoading ? 'Loading...' : 'Refresh Users'}
+                </button>
+              </div>
+
+              {punchUsers.length === 0 ? (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+                  <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /></svg>
+                  <p className="text-charcoal-light">No users yet.</p>
+                  <p className="text-xs text-charcoal-light/60 mt-1">Click &quot;Refresh Users&quot; to load accounts, or wait for players to sign up.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {punchUsers.map(u => (
+                    <div key={u._id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                          u.hasPunchCard ? 'bg-yellow/20 text-league-gold' : 'bg-gray-100 text-charcoal-light'
+                        }`}>
+                          {(u.name || '?')[0].toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-charcoal">{u.name || 'No name'}</p>
+                          <p className="text-xs text-charcoal-light">{u.email}</p>
+                          {u.phone && <p className="text-xs text-charcoal-light">{u.phone}</p>}
+                        </div>
+                        {u.hasPunchCard ? (
+                          <div className="text-right">
+                            <div className="flex gap-1 mb-1">
+                              {Array.from({ length: 5 }).map((_, i) => (
+                                <div key={i} className={`w-4 h-4 rounded-sm ${i < (u.punchCardPunches || 0) ? 'bg-teal/30' : 'bg-gray-100'}`} />
+                              ))}
+                              <div className={`w-4 h-4 rounded-sm ${(u.punchCardPunches || 0) >= 5 ? 'bg-yellow/40' : 'bg-gray-100'}`}>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={(u.punchCardPunches || 0) >= 5 ? '#F0A500' : '#D1D5DB'} strokeWidth="2" className="m-0.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-charcoal-light">{u.punchCardPunches || 0}/5 used{(u.punchCardPunches || 0) >= 5 ? ' + bonus' : ''}</p>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-charcoal-light/60">No card</span>
+                        )}
+                        <div className="flex gap-1 ml-2">
+                          {u.hasPunchCard && (
+                            <button onClick={() => resetUserPunchCard(u._id)}
+                              className="px-2 py-1 text-[11px] font-semibold bg-yellow/20 text-league-gold rounded hover:bg-yellow/30 transition-colors cursor-pointer border-none"
+                              title="Reset punches to 0">
+                              Reset
+                            </button>
+                          )}
+                          <button onClick={() => toggleUserPunchCard(u._id, u.hasPunchCard)}
+                            className={`px-2 py-1 text-[11px] font-semibold rounded transition-colors cursor-pointer border-none ${
+                              u.hasPunchCard
+                                ? 'bg-coral/10 text-coral hover:bg-coral/20'
+                                : 'bg-teal/10 text-teal hover:bg-teal/20'
+                            }`}>
+                            {u.hasPunchCard ? 'Remove' : 'Give Card'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

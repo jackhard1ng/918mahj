@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CONTACT } from '../config'
-import { isFirebaseReady, fetchAttendees, saveEventAttendees, getEventId } from '../services/db'
+import { isFirebaseReady, fetchAttendees, saveEventAttendees, getEventId, saveUserProfile } from '../services/db'
 
 const ATTENDEE_STORAGE_KEY = 'mahj918_admin_attendees'
 
@@ -130,8 +130,14 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
   const maxSpots = parseInt(event['Max Spots']) || 0
   const isFull = maxSpots > 0 && attendeeCount >= maxSpots
 
+  // Punch card: 5 paid rounds + 1 free bonus = 6 total uses
+  const punchesUsed = currentUser?.punchCardPunches || 0
+  const punchCardFull = punchesUsed >= 5  // earned the free bonus
+  const punchCardExpired = punchesUsed > 5 // all 6 used up
+  const canUsePunchCard = hasPunchCard && !punchCardExpired
+
   // Determine total steps: 3 for paid events without punch card, 2 if free or has punch card
-  const paidNoPunch = !isFree && !hasPunchCard
+  const paidNoPunch = !isFree && !canUsePunchCard
   const totalSteps = paidNoPunch ? 3 : 2
 
   async function handleRegister() {
@@ -149,18 +155,33 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
     }
     if (maxSpots > 0 && attendees.length >= maxSpots) { setSubmitting(false); return }
 
+    const usingPunchCard = canUsePunchCard && !isFree
+    const isBonusRound = usingPunchCard && punchCardFull
+
     const newAttendee = {
       name: name.trim(),
       contact: contact.trim(),
       level: level || '',
-      hasPunchCard,
+      hasPunchCard: usingPunchCard,
       tableRequests: tableRequests.trim(),
-      paid: isFree || hasPunchCard,
-      notes: isFree ? 'Self-registered (free event)' : hasPunchCard ? 'Punch card used' : '',
+      paid: isFree || usingPunchCard,
+      notes: isFree ? 'Self-registered (free event)' : isBonusRound ? 'Punch card FREE bonus round' : usingPunchCard ? `Punch card (${punchesUsed + 1}/5)` : '',
       userId: currentUser?.uid || '',
     }
 
     const success = await addAttendeeToStorage(event, newAttendee)
+
+    // Deduct a punch from the user's card
+    if (success && usingPunchCard && currentUser?.uid) {
+      const newPunches = punchesUsed + 1
+      const cardUsedUp = newPunches > 5 // used all 5 + bonus
+      await saveUserProfile(currentUser.uid, {
+        punchCardPunches: newPunches,
+        // If all 6 rounds used, mark card as expired
+        ...(cardUsedUp ? { hasPunchCard: false } : {}),
+      })
+    }
+
     setSubmitting(false)
     if (success) {
       if (paidNoPunch) {
@@ -245,13 +266,21 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
             <p className="font-semibold text-charcoal text-sm">{event['Event Name']}</p>
             <p className="text-charcoal-light text-xs mt-1">{event['Date']} &bull; {event['Time']} &bull; {event['Venue']}</p>
 
-            {hasPunchCard && !isFree && (
+            {canUsePunchCard && !isFree && (
               <div className="mt-4 p-3 bg-yellow/20 rounded-lg">
                 <div className="flex items-center justify-center gap-2">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /></svg>
-                  <p className="text-sm font-semibold text-league-gold">Punch card applied — you&apos;re all good!</p>
+                  <p className="text-sm font-semibold text-league-gold">
+                    {punchCardFull ? 'FREE bonus round used!' : `Punch ${punchesUsed + 1} of 5 used`}
+                  </p>
                 </div>
-                <p className="text-xs text-charcoal-light mt-1">No payment needed for this event.</p>
+                <p className="text-xs text-charcoal-light mt-1">
+                  {punchCardFull
+                    ? 'That was your free bonus — nice!'
+                    : punchesUsed + 1 >= 5
+                      ? 'That was your last punch — next one is FREE!'
+                      : `${5 - punchesUsed - 1} punches remaining on your card.`}
+                </p>
               </div>
             )}
 
@@ -364,7 +393,7 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
                                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={hasPunchCard ? '#4ECDC4' : '#636E72'} strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /></svg>
                                   <span className={`text-sm font-semibold ${hasPunchCard ? 'text-teal' : 'text-charcoal'}`}>Yes, I do!</span>
                                 </div>
-                                <p className="text-[10px] text-charcoal-light mt-1">Skip payment</p>
+                                <p className="text-[10px] text-charcoal-light mt-1">Use a punch</p>
                               </button>
                               <button type="button"
                                 onClick={() => setHasPunchCard(false)}
@@ -379,11 +408,41 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
                                 <p className="text-[10px] text-charcoal-light mt-1">I&apos;ll pay {event['Price']}</p>
                               </button>
                             </div>
-                            {hasPunchCard && (
+                            {hasPunchCard && canUsePunchCard && currentUser && (
+                              <div className="mt-2 p-2.5 bg-teal/5 rounded-lg">
+                                <div className="flex items-center gap-1.5 mb-1.5">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ECDC4" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
+                                  <span className="text-xs font-semibold text-teal">
+                                    {punchCardFull ? 'FREE bonus round!' : `Punch ${punchesUsed + 1} of 5`}
+                                  </span>
+                                </div>
+                                {/* Mini punch indicator */}
+                                <div className="flex gap-1">
+                                  {Array.from({ length: 5 }).map((_, i) => (
+                                    <div key={i} className={`w-4 h-4 rounded-sm flex items-center justify-center ${
+                                      i < punchesUsed ? 'bg-teal/20' : i === punchesUsed && !punchCardFull ? 'bg-teal/40 ring-1 ring-teal' : 'bg-gray-100'
+                                    }`}>
+                                      {i < punchesUsed && (
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#4ECDC4" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
+                                      )}
+                                    </div>
+                                  ))}
+                                  <div className={`w-4 h-4 rounded-sm flex items-center justify-center ${
+                                    punchCardFull ? 'bg-yellow/30 ring-1 ring-league-gold' : 'bg-gray-100'
+                                  }`}>
+                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={punchCardFull ? '#F0A500' : '#D1D5DB'} strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {hasPunchCard && !currentUser && (
                               <p className="text-xs text-teal mt-2 flex items-center gap-1">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
-                                Great! No payment needed — you&apos;re covered.
+                                No payment needed — punch card applied.
                               </p>
+                            )}
+                            {hasPunchCard && punchCardExpired && (
+                              <p className="text-xs text-coral mt-2">Your punch card is all used up. You&apos;ll need to pay or get a new card.</p>
                             )}
                           </div>
                         )}
