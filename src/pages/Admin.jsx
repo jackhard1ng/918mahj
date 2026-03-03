@@ -3,7 +3,7 @@ import { EVENT_COLORS } from '../config'
 import { useEvents, useShop, useTestimonials, useGallery } from '../hooks/useSiteData'
 import { isFirebaseReady, saveCollection, fetchAttendees, saveAttendees, saveEventAttendees, subscribeToAttendees, uploadImage, addGalleryPhoto, deleteGalleryPhoto, getEventId, saveUserProfile, COLLECTIONS } from '../services/db'
 import { db } from '../firebase'
-import { collection, getDocs } from 'firebase/firestore'
+import { collection, getDocs, onSnapshot } from 'firebase/firestore'
 
 const EVENT_TYPES = ['Open Play', 'Birdy Basics', 'League', 'Special Event', 'Private']
 const PRODUCT_CATEGORIES = ['Sets & Tiles', 'Accessories', 'Entertaining']
@@ -387,17 +387,21 @@ export default function Admin() {
   const [punchUsers, setPunchUsers] = useState([])
   const [punchLoading, setPunchLoading] = useState(false)
 
-  async function loadPunchCardUsers() {
+  // Real-time listener for punch card users
+  useEffect(() => {
     if (!isFirebaseReady() || !db) return
     setPunchLoading(true)
-    try {
-      const snapshot = await getDocs(collection(db, 'users'))
+    const unsub = onSnapshot(collection(db, 'users'), (snapshot) => {
       const users = []
       snapshot.forEach(d => users.push({ _id: d.id, ...d.data() }))
       setPunchUsers(users)
-    } catch (e) { console.error('Error loading users:', e) }
-    setPunchLoading(false)
-  }
+      setPunchLoading(false)
+    }, (error) => {
+      console.error('Error listening to users:', error)
+      setPunchLoading(false)
+    })
+    return unsub
+  }, [])
 
   async function toggleUserPunchCard(uid, currentValue) {
     const newVal = !currentValue
@@ -434,10 +438,7 @@ export default function Admin() {
     showToast('Request dismissed')
   }
 
-  // Auto-load punch card users when tab is selected
-  useEffect(() => {
-    if (tab === 'punchcards' && punchUsers.length === 0) loadPunchCardUsers()
-  }, [tab])
+
 
   const TABS = [
     { key: 'events', label: 'Events', count: events.length },
@@ -769,15 +770,12 @@ export default function Admin() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-sm text-charcoal-light">5 rounds for $75 &bull; 6th round is FREE</p>
-                  <p className="text-xs text-charcoal-light/60 mt-0.5">Punch cards persist permanently. Use +/- to adjust punches if needed.</p>
-                </div>
-                <button onClick={loadPunchCardUsers}
-                  className="px-4 py-2 bg-teal text-white font-semibold rounded-lg text-sm hover:bg-teal-dark transition-colors cursor-pointer border-none shrink-0">
-                  {punchLoading ? 'Loading...' : 'Refresh Users'}
-                </button>
+              <div className="mb-4">
+                <p className="text-sm text-charcoal-light">5 rounds for $75 &bull; 6th round is FREE</p>
+                <p className="text-xs text-charcoal-light/60 mt-0.5">
+                  Punch cards persist permanently. Use +/- to adjust punches if needed.
+                  <span className="inline-flex items-center gap-1 ml-1"><span className="w-1.5 h-1.5 bg-teal rounded-full animate-pulse inline-block" /> Updates automatically in real time</span>
+                </p>
               </div>
 
               {/* Pending punch card requests */}
