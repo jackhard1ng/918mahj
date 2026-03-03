@@ -118,6 +118,7 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
   const [checkResult, setCheckResult] = useState(null)
   const [attendeeCount, setAttendeeCount] = useState(0)
   const [submitting, setSubmitting] = useState(false)
+  const [punchSnapshot, setPunchSnapshot] = useState(null) // captures punch count at registration time
 
   // Load initial count
   useState(() => {
@@ -174,6 +175,8 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
 
     // Deduct a punch from the user's card
     if (success && usingPunchCard && currentUser?.uid) {
+      // Snapshot the count BEFORE the write so the success screen shows correct numbers
+      setPunchSnapshot(punchesUsed)
       const newPunches = punchesUsed + 1
       await saveUserProfile(currentUser.uid, {
         punchCardPunches: newPunches,
@@ -265,23 +268,29 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
             <p className="font-semibold text-charcoal text-sm">{event['Event Name']}</p>
             <p className="text-charcoal-light text-xs mt-1">{event['Date']} &bull; {event['Time']} &bull; {event['Venue']}</p>
 
-            {canUsePunchCard && !isFree && (
-              <div className="mt-4 p-3 bg-yellow/20 rounded-lg">
-                <div className="flex items-center justify-center gap-2">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /></svg>
-                  <p className="text-sm font-semibold text-league-gold">
-                    {punchCardFull ? 'FREE bonus round used!' : `Punch ${punchesUsed + 1} of 5 used`}
+            {punchSnapshot !== null && !isFree && (() => {
+              const used = punchSnapshot  // count BEFORE this registration
+              const thisIsBonus = used >= 5
+              const thisPunch = used + 1
+              const remaining = 5 - thisPunch
+              return (
+                <div className="mt-4 p-3 bg-yellow/20 rounded-lg">
+                  <div className="flex items-center justify-center gap-2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /></svg>
+                    <p className="text-sm font-semibold text-league-gold">
+                      {thisIsBonus ? 'FREE bonus round used!' : `Punch ${thisPunch} of 5 used`}
+                    </p>
+                  </div>
+                  <p className="text-xs text-charcoal-light mt-1">
+                    {thisIsBonus
+                      ? 'That was your free bonus — nice!'
+                      : remaining <= 0
+                        ? 'That was your last punch — next one is FREE!'
+                        : `${remaining} punch${remaining !== 1 ? 'es' : ''} remaining on your card.`}
                   </p>
                 </div>
-                <p className="text-xs text-charcoal-light mt-1">
-                  {punchCardFull
-                    ? 'That was your free bonus — nice!'
-                    : punchesUsed + 1 >= 5
-                      ? 'That was your last punch — next one is FREE!'
-                      : `${5 - punchesUsed - 1} punches remaining on your card.`}
-                </p>
-              </div>
-            )}
+              )
+            })()}
 
             {isFree && (
               <div className="mt-4 p-3 bg-teal/10 rounded-lg">
