@@ -129,12 +129,13 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
   const isFree = /free/i.test(event['Price'] || '')
   const maxSpots = parseInt(event['Max Spots']) || 0
   const isFull = maxSpots > 0 && attendeeCount >= maxSpots
+  const eventPunchEligible = (event['Punch Card Eligible'] || 'yes') !== 'no'
 
   // Punch card: 5 paid rounds + 1 free bonus = 6 total uses
   const punchesUsed = currentUser?.punchCardPunches || 0
   const punchCardFull = punchesUsed >= 5  // earned the free bonus
   const punchCardExpired = punchesUsed > 5 // all 6 used up
-  const canUsePunchCard = hasPunchCard && !punchCardExpired
+  const canUsePunchCard = hasPunchCard && !punchCardExpired && eventPunchEligible
 
   // Determine total steps: 3 for paid events without punch card, 2 if free or has punch card
   const paidNoPunch = !isFree && !canUsePunchCard
@@ -378,7 +379,7 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
                     {/* STEP 2: Punch Card + Table Requests */}
                     {step === 2 && (
                       <div>
-                        {!isFree && (
+                        {!isFree && eventPunchEligible && (
                           <div className="mb-4">
                             <label className="block text-sm font-semibold text-charcoal mb-2">Do you have a punch card?</label>
                             <div className="grid grid-cols-2 gap-2">

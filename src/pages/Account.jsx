@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getUserRegistrations } from '../services/db'
 import { useEvents } from '../hooks/useSiteData'
+import { CONTACT } from '../config'
 
 const LEVELS = [
   { value: 'beginner', label: 'Beginner', desc: 'New to Mahjong or still learning the basics' },
@@ -339,9 +341,102 @@ function ProfileSection({ profile, onUpdate }) {
   )
 }
 
+function parseEventDate(dateStr) {
+  if (!dateStr) return null
+  const [month, day, year] = dateStr.split('/')
+  return new Date(year, month - 1, day)
+}
+
+function getMonthDays(year, month) {
+  const firstDay = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  return { firstDay, daysInMonth }
+}
+
+function MiniCalendar({ enrichedRegs }) {
+  const [viewDate, setViewDate] = useState(new Date())
+  const year = viewDate.getFullYear()
+  const month = viewDate.getMonth()
+  const { firstDay, daysInMonth } = getMonthDays(year, month)
+
+  const eventsByDay = useMemo(() => {
+    const map = {}
+    enrichedRegs.forEach(reg => {
+      const d = parseEventDate(reg.event['Date'])
+      if (d && d.getFullYear() === year && d.getMonth() === month) {
+        const day = d.getDate()
+        if (!map[day]) map[day] = []
+        map[day].push(reg)
+      }
+    })
+    return map
+  }, [enrichedRegs, year, month])
+
+  const prevMonth = () => setViewDate(new Date(year, month - 1, 1))
+  const nextMonth = () => setViewDate(new Date(year, month + 1, 1))
+  const monthName = viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer bg-transparent border-none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2D3436" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
+        </button>
+        <h4 className="font-heading text-sm text-charcoal">{monthName}</h4>
+        <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer bg-transparent border-none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2D3436" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
+        </button>
+      </div>
+      <div className="grid grid-cols-7 text-center text-[10px] font-semibold text-charcoal-light mb-1">
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+          <div key={i} className="py-0.5">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: firstDay }).map((_, i) => (
+          <div key={`e-${i}`} className="aspect-square" />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1
+          const dayRegs = eventsByDay[day] || []
+          const isToday = new Date().getDate() === day && new Date().getMonth() === month && new Date().getFullYear() === year
+          const hasEvent = dayRegs.length > 0
+
+          return (
+            <div key={day} className={`aspect-square rounded-md flex flex-col items-center justify-center relative ${
+              isToday ? 'bg-teal/10' : hasEvent ? 'bg-teal/5' : ''
+            }`} title={dayRegs.map(r => r.event['Event Name']).join(', ')}>
+              <span className={`text-[11px] font-semibold ${isToday ? 'text-teal' : hasEvent ? 'text-charcoal' : 'text-charcoal-light'}`}>{day}</span>
+              {hasEvent && (
+                <div className="flex gap-0.5 mt-0.5">
+                  {dayRegs.slice(0, 3).map((r, j) => (
+                    <div key={j} className={`w-1.5 h-1.5 rounded-full ${r.paid ? 'bg-teal' : 'bg-yellow'}`} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      {/* Legend */}
+      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100">
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-2 rounded-full bg-teal" />
+          <span className="text-[10px] text-charcoal-light">Confirmed</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-2 rounded-full bg-yellow" />
+          <span className="text-[10px] text-charcoal-light">Payment pending</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MyEventsSection({ user, profile }) {
   const [registrations, setRegistrations] = useState([])
   const [loading, setLoading] = useState(true)
+  const [eventsView, setEventsView] = useState('list')
   const { allEvents } = useEvents()
 
   useEffect(() => {
@@ -376,15 +471,35 @@ function MyEventsSection({ user, profile }) {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-      <h3 className="font-heading text-lg text-charcoal mb-4">My Events</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-heading text-lg text-charcoal">My Events</h3>
+        {enrichedRegs.length > 0 && (
+          <div className="flex bg-gray-100 rounded-lg p-0.5">
+            <button onClick={() => setEventsView('list')}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer border-none transition-colors ${
+                eventsView === 'list' ? 'bg-white text-charcoal shadow-sm' : 'text-charcoal-light bg-transparent'
+              }`}>
+              List
+            </button>
+            <button onClick={() => setEventsView('calendar')}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer border-none transition-colors ${
+                eventsView === 'calendar' ? 'bg-white text-charcoal shadow-sm' : 'text-charcoal-light bg-transparent'
+              }`}>
+              Calendar
+            </button>
+          </div>
+        )}
+      </div>
       {enrichedRegs.length === 0 ? (
         <div className="text-center py-6">
           <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
           <p className="text-sm text-charcoal-light">You haven&apos;t registered for any events yet.</p>
-          <a href="/events" className="inline-block mt-3 text-sm text-teal font-semibold hover:text-teal-dark no-underline">
+          <Link to="/events" className="inline-block mt-3 text-sm text-teal font-semibold hover:text-teal-dark no-underline">
             Browse Events &rarr;
-          </a>
+          </Link>
         </div>
+      ) : eventsView === 'calendar' ? (
+        <MiniCalendar enrichedRegs={enrichedRegs} />
       ) : (
         <div className="space-y-3">
           {enrichedRegs.map((reg, i) => (
@@ -415,8 +530,68 @@ function MyEventsSection({ user, profile }) {
               </div>
             </div>
           ))}
+          <Link to="/events" className="block text-center text-sm text-teal font-semibold hover:text-teal-dark no-underline pt-1">
+            View All Events &rarr;
+          </Link>
         </div>
       )}
+    </div>
+  )
+}
+
+function PaymentLink({ label, value, color, icon, hint }) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  }
+  return (
+    <div className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
+      <div className={`w-8 h-8 ${color} rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0`}>{icon}</div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-charcoal">{label}</p>
+        <p className="text-xs text-charcoal-light truncate">{value}</p>
+        {hint && <p className="text-[10px] text-charcoal-light/60 mt-0.5" dangerouslySetInnerHTML={{ __html: hint }} />}
+      </div>
+      <button onClick={copy} className="text-xs font-semibold text-teal bg-transparent border-none cursor-pointer hover:text-teal-dark px-2 py-1 shrink-0">
+        {copied ? 'Copied!' : 'Copy'}
+      </button>
+    </div>
+  )
+}
+
+function BuyPunchCardSection({ profile }) {
+  // Show if user has no punch card or card is expired (all 6 used)
+  const hasActiveCard = profile?.hasPunchCard && (profile?.punchCardPunches || 0) <= 5
+  if (hasActiveCard) return null
+
+  return (
+    <div className="bg-gradient-to-br from-yellow/10 to-league-gold/5 rounded-2xl shadow-sm border border-yellow/30 p-6">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 bg-yellow/30 rounded-full flex items-center justify-center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /></svg>
+        </div>
+        <div>
+          <h3 className="font-heading text-lg text-charcoal">Get a Punch Card</h3>
+          <p className="text-sm text-charcoal-light">5 rounds for $75 &bull; 6th round FREE</p>
+        </div>
+      </div>
+      <p className="text-sm text-charcoal-light mb-4">
+        Save money with a punch card! Pay $75 upfront for 5 rounds of play, and your 6th round is on us.
+        That&apos;s just $12.50 per round.
+      </p>
+      <div className="space-y-2 mb-3">
+        <p className="text-xs font-semibold text-charcoal uppercase tracking-wide">Send $75 to:</p>
+        <PaymentLink label="Venmo" value={CONTACT.venmo} color="bg-[#3D95CE]" icon="V" />
+        <PaymentLink label="PayPal" value={CONTACT.paypal} color="bg-[#0070BA]" icon="P" />
+        <PaymentLink label="Zelle" value={CONTACT.zelle} color="bg-[#6D1ED4]" icon="Z" hint="Open your bank app or Zelle &rarr; Send &rarr; enter email above" />
+      </div>
+      <div className="p-3 bg-yellow/20 border-2 border-yellow rounded-lg">
+        <p className="text-xs font-bold text-charcoal uppercase tracking-wide mb-0.5">Include in your memo:</p>
+        <p className="text-sm font-semibold text-charcoal">Punch Card &mdash; {profile?.name || 'Your Name'}</p>
+      </div>
+      <p className="text-[10px] text-charcoal-light/60 mt-2 text-center">
+        Once we receive your payment, we&apos;ll activate your punch card. You&apos;ll see it appear on this page!
+      </p>
     </div>
   )
 }
@@ -443,6 +618,7 @@ function Dashboard() {
       <div className="space-y-6">
         <ProfileSection profile={profile} onUpdate={updateUserProfile} />
         <PunchCardDisplay profile={profile} onUpdate={updateUserProfile} />
+        <BuyPunchCardSection profile={profile} />
         <MyEventsSection user={user} profile={profile} />
       </div>
     </div>

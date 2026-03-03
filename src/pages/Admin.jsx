@@ -12,6 +12,7 @@ const EMPTY_EVENT = {
   'Event Name': '', 'Date': '', 'Time': '', 'Venue': '', 'Address': '',
   'Event Type': 'Open Play', 'Price': '', 'Description': '',
   'Registration Link': '', 'Max Spots': '', 'Image URL': '',
+  'Punch Card Eligible': 'yes',
 }
 const EMPTY_PRODUCT = {
   'Product Name': '', 'Category': 'Sets & Tiles', 'Image URL': '',
@@ -892,6 +893,17 @@ export default function Admin() {
                     placeholder="Leave blank for unlimited" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal" />
                 </div>
               </div>
+              {/* Punch Card Eligible toggle */}
+              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+                <input type="checkbox"
+                  checked={(eventForm['Punch Card Eligible'] || 'yes') === 'yes'}
+                  onChange={e => setEventForm(p => ({ ...p, 'Punch Card Eligible': e.target.checked ? 'yes' : 'no' }))}
+                  className="w-4 h-4 accent-[#4ECDC4]" />
+                <div>
+                  <p className="text-sm font-semibold text-charcoal">Punch card eligible</p>
+                  <p className="text-xs text-charcoal-light">Players can use a punch from their punch card for this event. Turn off for special pricing events.</p>
+                </div>
+              </label>
               <ImageUpload value={eventForm['Image URL']} onChange={v => setEventForm(p => ({ ...p, 'Image URL': v }))} showToast={showToast} storagePrefix="events" />
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-2">

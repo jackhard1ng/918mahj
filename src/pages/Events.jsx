@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useEvents } from '../hooks/useSiteData'
+import { useAuth } from '../contexts/AuthContext'
+import { getUserRegistrations, getEventId } from '../services/db'
 import EventCard from '../components/EventCard'
 import { CardSkeleton, ErrorFallback } from '../components/LoadingSkeleton'
 import { EVENT_COLORS } from '../config'
@@ -19,7 +21,7 @@ function getMonthDays(year, month) {
   return { firstDay, daysInMonth }
 }
 
-function CalendarView({ events, onEventClick }) {
+function CalendarView({ events, onEventClick, registeredEventIds = new Set() }) {
   const [viewDate, setViewDate] = useState(new Date())
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth()
@@ -77,12 +79,15 @@ function CalendarView({ events, onEventClick }) {
               <div className="mt-1 space-y-0.5">
                 {dayEvents.slice(0, 2).map((e, j) => {
                   const colors = EVENT_COLORS[e['Event Type']] || EVENT_COLORS['Open Play']
+                  const eid = getEventId(e)
+                  const isRegistered = registeredEventIds.has(eid)
                   return (
                     <button
                       key={j}
                       onClick={() => onEventClick(e)}
-                      className={`block w-full text-left text-xs px-1 py-0.5 rounded truncate cursor-pointer border-none ${colors.badge} opacity-90 hover:opacity-100`}
+                      className={`block w-full text-left text-xs px-1 py-0.5 rounded truncate cursor-pointer border-none ${colors.badge} opacity-90 hover:opacity-100 ${isRegistered ? 'ring-2 ring-offset-1 ring-teal' : ''}`}
                     >
+                      {isRegistered && <svg className="inline w-3 h-3 mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>}
                       {e['Event Name']}
                     </button>
                   )
@@ -101,9 +106,18 @@ function CalendarView({ events, onEventClick }) {
 
 export default function Events() {
   const { events, loading, error } = useEvents()
+  const { user, profile } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [view, setView] = useState('list')
   const [selectedEvent, setSelectedEvent] = useState(null)
+  const [registeredEventIds, setRegisteredEventIds] = useState(new Set())
+
+  useEffect(() => {
+    if (!user) { setRegisteredEventIds(new Set()); return }
+    getUserRegistrations(user.uid, profile?.name).then(regs => {
+      setRegisteredEventIds(new Set(regs.map(r => r.eventId)))
+    })
+  }, [user, profile?.name])
 
   const filterType = searchParams.get('type') || 'All'
 
@@ -187,7 +201,7 @@ export default function Events() {
           <ErrorFallback message="Events are loading — check back soon!" />
         ) : view === 'calendar' ? (
           <>
-            <CalendarView events={filteredEvents} onEventClick={setSelectedEvent} />
+            <CalendarView events={filteredEvents} onEventClick={setSelectedEvent} registeredEventIds={registeredEventIds} />
             {selectedEvent && (
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelectedEvent(null)}>
                 <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
