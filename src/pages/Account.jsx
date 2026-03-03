@@ -542,24 +542,41 @@ function MyEventsSection({ user, profile }) {
   )
 }
 
+function getPaymentUrl(label, value) {
+  if (label === 'Venmo') return `https://venmo.com/${value.replace('@', '')}`
+  if (label === 'PayPal') return `https://www.paypal.biz/${value}`
+  if (label === 'Zelle') return 'https://www.zellepay.com/how-it-works'
+  return null
+}
+
 function PaymentLink({ label, value, color, icon, hint }) {
-  const [copied, setCopied] = useState(false)
-  function copy() {
-    navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
-  }
-  return (
-    <div className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
+  const url = getPaymentUrl(label, value)
+
+  const content = (
+    <div className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors ${url ? 'bg-gray-50 hover:bg-gray-100 active:bg-gray-200 cursor-pointer' : 'bg-gray-50'}`}>
       <div className={`w-8 h-8 ${color} rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0`}>{icon}</div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-charcoal">{label}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-semibold text-charcoal">{label}</p>
+          {url && <span className="text-[10px] font-semibold text-teal bg-teal/10 px-1.5 py-0.5 rounded">Tap to pay</span>}
+        </div>
         <p className="text-xs text-charcoal-light truncate">{value}</p>
         {hint && <p className="text-[10px] text-charcoal-light/60 mt-0.5" dangerouslySetInnerHTML={{ __html: hint }} />}
       </div>
-      <button onClick={copy} className="text-xs font-semibold text-teal bg-transparent border-none cursor-pointer hover:text-teal-dark px-2 py-1 shrink-0">
-        {copied ? 'Copied!' : 'Copy'}
-      </button>
+      {url && (
+        <svg className="w-4 h-4 text-teal ml-auto shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" /></svg>
+      )}
     </div>
   )
+
+  if (url) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block no-underline">
+        {content}
+      </a>
+    )
+  }
+  return content
 }
 
 function BuyPunchCardSection({ profile, onUpdate }) {

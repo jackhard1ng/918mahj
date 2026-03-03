@@ -209,12 +209,13 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in-up max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <button className="absolute top-4 right-4 p-1 bg-transparent border-none cursor-pointer text-charcoal-light hover:text-charcoal" onClick={onClose} aria-label="Close">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
-        </button>
+    <div className="fixed inset-0 z-50 overflow-y-auto" onClick={onClose}>
+      <div className="min-h-full flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
+        <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in-up my-4" onClick={e => e.stopPropagation()}>
+          <button className="sticky top-0 float-right z-10 p-1 bg-white/80 backdrop-blur-sm rounded-full border-none cursor-pointer text-charcoal-light hover:text-charcoal shadow-sm" onClick={onClose} aria-label="Close">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+          </button>
 
         {/* Payment step (step 3 for paid events without punch card) */}
         {step === 3 && view !== 'success' ? (
@@ -513,6 +514,7 @@ export default function RegistrationModal({ event, onClose, currentUser }) {
             )}
           </>
         )}
+        </div>
       </div>
     </div>
   )
